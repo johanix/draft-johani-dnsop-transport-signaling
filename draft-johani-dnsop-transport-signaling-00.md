@@ -1,6 +1,6 @@
 ---
 title: "Authoritative DNS Transport Signaling"
-abbrev: "Authoritative DNS Transport Signaling"
+abbrev: "DNS Transport Signaling"
 docname: draft-johani-dnsop-transport-signaling-00
 date: {DATE}
 category: std
@@ -15,23 +15,23 @@ pi: [toc, sortrefs, symrefs]
 
 author:
  -
-    ins: J. Stenstam
-    name: Johan Stenstam
-    organization: The Swedish Internet Foundation
-    country: Sweden
-    email: johan.stenstam@internetstiftelsen.se
--
-    ins: L. Fernandez
-    name: Leon Fernandez
-    organization: The Swedish Internet Foundation
-    country: Sweden
-    email: leon.fernandez@internetstiftelsen.se
+  ins: J. Stenstam
+  name: Johan Stenstam
+  organization: The Swedish Internet Foundation
+  country: Sweden
+  email: johan.stenstam@internetstiftelsen.se
  -
-    ins: E. Bergström
-    name: Erik Bergström
-    organization: The Swedish Internet Foundation
-    country: Sweden
-    email: erik.bergstrom@internetstiftelsen.se
+  ins: L. Fernandez
+  name: Leon Fernandez
+  organization: The Swedish Internet Foundation
+  country: Sweden
+  email: leon.fernandez@internetstiftelsen.se
+ -
+  ins: E. Bergström
+  name: Erik Bergström
+  organization: The Swedish Internet Foundation
+  country: Sweden
+  email: erik.bergstrom@internetstiftelsen.se
 
 normative:
 
@@ -49,6 +49,11 @@ efficiently, thereby improving privacy, security, and performance for
 subsequent interactions. The mechanism is designed to be safe,
 backward-compatible, and effective even when DNSSEC validation of the
 hint is not possible or desired.
+
+TO BE REMOVED: This document is being collaborated on in Github at:
+[https://github.com/johanix/draft-johani-dnsop-transport-signaling](https://github.com/johanix/draft-johani-dnsop-transport-signaling).
+The most recent working version of the document, open issues, etc, should all be
+available there.  The authors (gratefully) accept pull requests.
 
 --- middle
 
@@ -68,14 +73,13 @@ these records, often from a parent zone. While robust, this approach
 can introduce additional latency and requires explicit configuration
 at the parent zone level.
 
-This document proposes an "DNS Opportunistic Transport
-Signaling" (DNS OTS) mechanism. DNS OTS, aka an "OTS Hint" allows 
-an authoritative DNS nameserver to directly convey its transport
-capabilities as a hint within the additional section of responses
-to queries where it identifies itself as an authoritative nameserver
-for the requested zone. This direct, in-band signaling provides a
-low-latency discovery path, even when a formal, validated signal is
-not available.
+This document proposes an "DNS Opportunistic Transport Signaling"
+(DNS OTS) mechanism. DNS OTS, aka an "OTS Hint" allows an authoritative
+DNS nameserver to directly convey its transport capabilities as a hint
+within the additional section of responses to queries where it
+identifies itself as an authoritative nameserver for the requested
+zone. This direct, in-band signaling provides a low-latency discovery
+path, even when a formal, validated signal is not available.
 
 # **2\. Terminology**
 
@@ -141,9 +145,9 @@ characteristics:
 authoritative nameserver itself, as identified in the NS RRset that
 triggered its inclusion (e.g., ns.dnsprovider.com.).
 
-* **CLASS:** IN (Internet).  
+* **CLASS:** IN (Internet).
 
-* **TYPE:** SVCB.  
+* **TYPE:** SVCB.
 
 * **TTL:** The TTL of the SVCB record SHOULD be chosen by the
 authoritative server operator. A TTL similar to that of the NS record
@@ -162,7 +166,7 @@ supported transport protocols. In this document only the alpn parameter
 {{!RFC9460}} is described, as relevant for signaling DoT (alpn=dot),
 DoH (alpn=doh) and DoQ (alpn=doq).
 
-**Example:**  
+**Example:**
 
 If ns.dnsprovider.com responds to a query for www.customer.com and
 ns.dnsprovider.com is listed in the NS RRset, the additional section
@@ -182,7 +186,7 @@ matches an authoritative nameserver identified in the Authority or
 Answer sections of the *current* response, the resolver MAY consider
 this an OTS Hint.
 
-3. **DNSSEC Validation (Optional but Recommended):**  
+3. **DNSSEC Validation (Optional but Recommended):**
 
 * The recursive resolver SHOULD attempt to DNSSEC validate the
 OTS Hint. This involves validating the SVCB record itself and its
@@ -210,7 +214,7 @@ policy. Caching unvalidated hints SHOULD be done with care, and they
 SHOULD be invalidated quickly if a connection attempt based on them
 fails.
 
-5. **Prioritization:**  
+5. **Prioritization:**
 
 * Any DNSSEC-validated SVCB record found via explicit query
 (e.g., ns.example.com for a queried domain MUST take precedence
@@ -228,7 +232,7 @@ unvalidated one) fails or times out.
 # **5\. Comparison with DELEG**
 
 The idea to use an SVCB alpn parameter for transport signaling
-originated with the work on DELEG {{?draft-wesplaap-dnsop-deleg}}.
+originated with the work on DELEG {{?I-D.draft-ietf-deleg}}.
 The current document uses the same data format, but as an
 opportunistic addition to the Additional Section rather than as
 mandatory part of a changed delegation mechanism.
@@ -307,32 +311,8 @@ This document requires no IANA actions.
 
 ...
 
-# **9\. References**
+--- back
 
-## **9.1. Normative References**
+# Change History (to be removed before publication)
 
-* \[RFC2119\] Bradner, S., "Key words for use in RFCs to Indicate
-Requirement Levels", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March
-1997,
-[https://www.rfc-editor.org/info/rfc2119](https://www.rfc-editor.org/info/rfc2119).
-
-* \[RFC7858\] Hu, Z., et al., "DNS over TLS", RFC 7858, DOI
-10.17487/RFC7858, May 2016,
-[https://www.rfc-editor.org/info/rfc7858](https://www.rfc-editor.org/info/rfc7858).
-
-* \[RFC8174\] Leiba, B., "Ambiguity of Ought to and Should in RFCs",
-BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017,
-[https://www.rfc-editor.org/info/rfc8174](https://www.rfc-editor.org/info/rfc8174).
-
-* \[RFC9250\] Hu, Z., et al., "DNS over QUIC", RFC 9250, DOI
-10.17487/RFC9250, May 2022,
-[https://www.rfc-editor.org/info/rfc9250](https://www.rfc-editor.org/info/rfc9250).
-
-* \[RFC9460\] Schinazi, D., "SVCB and HTTPS DNS Resource Records", RFC
-9460, DOI 10.17487/RFC9460, November 2023,
-[https://www.rfc-editor.org/info/RFC9460](https://www.google.com/search?q=https://www.rfc-editor.org/info/RFC9460).
-
-* \[RFC9461\] Schinazi, D., "The HTTPS DNS Resource Record", RFC 9461,
-DOI 10.17487/RFC9461, November 2023,
-[https://www.rfc-editor.org/info/RFC9461](https://www.google.com/search?q=https://www.rfc-editor.org/info/RFC9461).
-
+> Initial public draft
