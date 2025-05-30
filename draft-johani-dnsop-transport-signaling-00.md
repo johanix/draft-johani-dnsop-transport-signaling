@@ -43,10 +43,10 @@ This document proposes a mechanism for authoritative DNS servers to
 opportunistically signal their support for alternative transport
 protocols (e.g., DNS over TLS (DoT), DNS over HTTPS (DoH) and DNS over
 QUIC (DoQ)) directly within the additional section of authoritative
-DNS responses. This "hint-based" approach aims to enable recursive
-resolvers to discover and upgrade transport connections more
-efficiently, thereby improving privacy, security, and performance for
-subsequent interactions. 
+DNS responses. This "hint-based" approach aims to enable resolvers to
+discover and upgrade transport connections more efficiently, thereby
+improving privacy, security, and performance for subsequent
+interactions.
 
 The mechanism is designed to not require any protocol change. It is
 safe, backward-compatible, and effective even when DNSSEC validation
@@ -62,11 +62,11 @@ available there.  The authors (gratefully) accept pull requests.
 # **1\. Introduction**
 
 The Domain Name System (DNS) primarily relies on UDP and TCP for
-communication between recursive resolvers and authoritative servers.
-While these protocols are well-established, there is a growing
-interest in leveraging modern transport protocols like DNS over TLS
-(DoT) {{!RFC7858}}, DNS over HTTPS (DoH) {{!RFC9461}} and DNS over
-QUIC (DoQ) {{!RFC9250}} to enhance privacy, security, and performance.
+communication between resolvers and authoritative servers.  While
+these protocols are well-established, there is a growing interest in
+leveraging modern transport protocols like DNS over TLS (DoT)
+{{!RFC7858}}, DNS over HTTPS (DoH) {{!RFC9461}} and DNS over QUIC
+(DoQ) {{!RFC9250}} to enhance privacy, security, and performance.
 
 Existing efforts to signal service connection information, such as the
 SVCB and HTTPS DNS records {{!RFC9460}} {{!RFC9461}}, primarily focus
@@ -75,9 +75,9 @@ these records, often from a parent zone. While robust, this approach
 can introduce additional latency and requires explicit configuration
 at the parent zone level.
 
-This document proposes an "DNS Opportunistic Transport Signaling"
-(DNS OTS) mechanism. DNS OTS, aka an "OTS Hint" allows an authoritative
-DNS nameserver to directly convey its transport capabilities as a hint
+This document proposes an "DNS Opportunistic Transport Signaling" (DNS
+OTS) mechanism. DNS OTS, aka an "OTS Hint" allows an authoritative DNS
+nameserver to directly convey its transport capabilities as a hint
 within the additional section of responses to queries where it
 identifies itself as an authoritative nameserver for the requested
 zone. This direct, in-band signaling provides a low-latency discovery
@@ -94,13 +94,14 @@ capitals.
 * **Authoritative Nameserver (Auth Server):** A DNS server that holds
 the authoritative zone data for a specific domain.
 
-* **Recursive Nameserver (Recursor):** A DNS server that processes user
-queries, performing iterative lookups to authoritative servers to
+* **Recursive Nameserver (Resolver):** A DNS server that processes
+user queries, performing iterative lookups to authoritative servers to
 resolve domain names.
 
 * **OTS Hint:** An SVCB record included opportunistically in the
 additional section of an authoritative DNS response, intended to
-signal the responding authoritative nameserver's transport capabilities.
+signal the responding authoritative nameserver's transport
+capabilities.
 
 * **SVCB Record:** Service Binding record, as defined in {{!RFC9460}}.
 
@@ -143,11 +144,11 @@ regardless of the specific name used in the NS RRset.
 
 ## **3.3 The No-Transport EDNS(0) Option**
 
-To provide a mechanism for recursive resolvers to explicitly opt out of
-receiving transport signals, this document defines a new EDNS(0) option
-called "no-transport" (NT). When included in a query, this option
-signals to the authoritative server that the recursive resolver does
-not want to receive any transport signals in the response.
+To provide a mechanism for resolvers to explicitly opt out of
+receiving transport signals, this document defines a new EDNS(0)
+option called "no-transport" (NT). When included in a query, this
+option signals to the authoritative server that the resolver does not
+want to receive any transport signals in the response.
 
 The No-Transport option is structured as follows:
 
@@ -172,25 +173,25 @@ OPTION-LENGTH:
     the length of the payload in octets. For the No-Transport option,
     this value MUST be 0 as there is no payload.
 
-When an authoritative server receives a query containing the EDNS(0) 
-No-Transport option, it SHOULD NOT include any OTS Hints in the response,
-regardless of whether it would normally do so based on the conditions
-described in Section 3.1.
+When an authoritative server receives a query containing the EDNS(0)
+No-Transport option, it SHOULD NOT include any OTS Hints in the
+response, regardless of whether it would normally do so based on the
+conditions described in Section 3.1.
 
-This option provides a clean way for recursive resolvers to opt out of
-receiving transport signals, which may be useful in scenarios where:
+This option provides a clean way for resolvers to opt out of receiving
+transport signals, which may be useful in scenarios where:
 
-* The recursive resolver has already established transport preferences
-  for a particular authoritative server
-* The recursive resolver does not support or does not want to use
-  alternative transports
-* The recursive resolver wants to minimize response sizes
-* The recursive resolver is operating in an environment where transport
-  signals are not needed or desired
+* The resolver has already established transport preferences for a
+  particular authoritative server
+* The resolver does not support or does not want to use alternative
+  transports
+* The resolver wants to minimize response sizes
+* The resolver is operating in an environment where transport signals
+  are not needed or desired
 
-The No-Transport option is designed to be a simple, lightweight mechanism
-that can be used to disable transport signaling without affecting the
-normal operation of DNS resolution.
+The No-Transport option is designed to be a simple, lightweight
+mechanism that can be used to disable transport signaling without
+affecting the normal operation of DNS resolution.
 
 ## **3.2\. Format of the OTS Hint**
 
@@ -219,9 +220,9 @@ capabilities described by the SVCB record refer to the owner name of
 the record.
 
 * **SVCB\_PARAMS:** A set of Service Parameters indicating the
-supported transport protocols. In this document only the alpn parameter
-{{!RFC9460}} is described, as relevant for signaling DoT (alpn=dot),
-DoH (alpn=doh) and DoQ (alpn=doq).
+supported transport protocols. In this document only the alpn
+parameter {{!RFC9460}} is described, as relevant for signaling DoT
+(alpn=dot), DoH (alpn=doh) and DoQ (alpn=doq).
 
 **Example:**
 
@@ -245,11 +246,10 @@ this an OTS Hint.
 
 3. **DNSSEC Validation (Optional but Recommended):**
 
-* The recursive resolver SHOULD attempt to DNSSEC validate the
-OTS Hint. This involves validating the SVCB record itself and its
-corresponding RRSIG (if present) against the DNSSEC chain of trust for
-the zone that owns the SVCB record (e.g., dnsprovider.com for
-ns.dnsprovider.com).
+* The resolver SHOULD attempt to DNSSEC validate the OTS Hint. This
+involves validating the SVCB record itself and its corresponding RRSIG
+(if present) against the DNSSEC chain of trust for the zone that owns
+the SVCB record (e.g., dnsprovider.com for ns.dnsprovider.com).
 
 * **If validation succeeds:** The OTS Hint is considered a **trusted
 signal**. The resolver MAY then prefer the signaled alternative
@@ -267,25 +267,25 @@ capable).
 
 4. **Prioritization:**
 
-* Any DNSSEC-validated SVCB record found via explicit query
-(e.g., ns.example.com for a queried domain MUST take precedence
-over any unvalidated OTS Hint.
+* Any DNSSEC-validated SVCB record found via explicit query (e.g.,
+ns.example.com for a queried domain MUST take precedence over any
+unvalidated OTS Hint.
 
 * The OTS Hint is a mechanism to *discover* capabilities
 opportunistically, not to override trusted delegation or service
 configuration.
 
-5. **Fallback:** Resolvers MUST always be prepared to fall
-back to traditional UDP/TCP transport if an attempt to use an
-alternative transport based on an OTS Hint (especially an
-unvalidated one) fails or times out.
+5. **Fallback:** Resolvers MUST always be prepared to fall back to
+traditional UDP/TCP transport if an attempt to use an alternative
+transport based on an OTS Hint (especially an unvalidated one) fails
+or times out.
 
 ### 4.1 Resolver Caching Strategies
 
-Resolvers implementing this mechanism have several options for
-caching the transport signals received via OTS Hints. Each strategy has
-different trade-offs in terms of efficiency, responsiveness to changes,
-and resource usage:
+Resolvers implementing this mechanism have several options for caching
+the transport signals received via OTS Hints. Each strategy has
+different trade-offs in terms of efficiency, responsiveness to
+changes, and resource usage:
 
 1. **Standard DNS Cache:** Treat the SVCB record like any other DNS
    record, caching it according to its TTL. This is the simplest
@@ -297,8 +297,8 @@ and resource usage:
    approach is more responsive to transport availability changes but
    may result in more connection attempts.
 
-3. **Success-Based Refresh:** Refresh the transport signal cache
-   entry each time a successful connection is made using that
+3. **Success-Based Refresh:** Refresh the transport signal cache entry
+   each time a successful connection is made using that
    transport. This provides a balance between efficiency and
    responsiveness but requires additional bookkeeping.
 
@@ -319,10 +319,10 @@ about its use.
 # **5\. Comparison with DELEG**
 
 The idea to use an SVCB alpn parameter for transport signaling
-originated with the work on DELEG {{?I-D.draft-ietf-deleg}}.
-The current document uses the same data format, but as an
-opportunistic addition to the Additional Section rather than as
-mandatory part of a changed delegation mechanism.
+originated with the work on DELEG {{?I-D.draft-ietf-deleg}}.  The
+current document uses the same data format, but as an opportunistic
+addition to the Additional Section rather than as mandatory part of a
+changed delegation mechanism.
 
 Both mechanisms have distinct use cases, and pros and cons. The major
 advantage of the DELEG mechanism is that is cannot be spoofed or
@@ -346,31 +346,32 @@ effort.
 
 # **6\. Security Considerations**
 
-* **Spoofing of Unvalidated Hints:** A OTS Hint that cannot be
-DNSSEC validated (e.g., for ns.customer.com where customer.com is
-unsigned) is susceptible to spoofing by an on-path attacker. Such an
-attacker could insert a fake SVCB record advertising a non-existing
-transport, thereby denying connection over that transport. However,
-since the hint is opportunistic and not required for DNS resolution,
-the worst-case scenario is that the recursive resolver attempts a
-connection that fails or falls back to traditional transports.
-Security for the actual DNS data remains unaffected. The cryptographic
-validation of TLS/QUIC (via X.509 certificates) for DoT/DoQ would
-still protect the integrity and privacy of the connection itself.
+* **Spoofing of Unvalidated Hints:** A OTS Hint that cannot be DNSSEC
+validated (e.g., for ns.customer.com where customer.com is unsigned)
+is susceptible to spoofing by an on-path attacker. Such an attacker
+could insert a fake SVCB record advertising a non-existing transport,
+thereby denying connection over that transport. However, since the
+hint is opportunistic and not required for DNS resolution, the
+worst-case scenario is that the resolver attempts a connection that
+fails or falls back to traditional transports.  Security for the
+actual DNS data remains unaffected. The cryptographic validation of
+TLS/QUIC (via X.509 certificates) for DoT/DoQ would still protect the
+integrity and privacy of the connection itself.
 
 * **DNSSEC Validation:** When a OTS Hint is signed by DNSSEC (e.g.,
 ns.dnsprovider.com SVCB record from a signed dnsprovider.com zone), it
-provides a trusted signal. Recursive resolvers SHOULD leverage DNSSEC
-validation to distinguish between trusted and unvalidated hints.
+provides a trusted signal. Resolvers SHOULD leverage DNSSEC validation
+to distinguish between trusted and unvalidated hints.
 
 * **No New Attack Vectors:** This mechanism does not introduce new
 attack vectors for DNS data itself, as it primarily concerns transport
-discovery. It relies on the existing security properties of DoT, DoH and
-DoQ for actual session security.
+discovery. It relies on the existing security properties of DoT, DoH
+and DoQ for actual session security.
 
-* **Safe Rollout:** As existing recursive servers carefully avoid data
-in the Additional Section that they do not need, the OTS Hint will
-be ignored by everyone except recursive servers that understand the Hint.
+* **Safe Rollout:** As existing recursive nameservers carefully avoid
+data in the Additional Section that they do not need, the OTS Hint
+will be ignored by everyone except recursive nameservers that
+understand the OTS Hint.
 
 # **7\. Operational Considerations**
 
@@ -386,13 +387,12 @@ identities list.
 
 * **Rollout Strategy:** This mechanism supports a gradual rollout.
 Authoritative servers can begin sending hints without requiring
-changes from recursive resolvers, and recursive resolvers can begin
-processing hints without requiring all authoritative servers to
-implement the feature.
+changes from resolvers, and resolvers can begin processing hints
+without requiring all authoritative servers to implement the feature.
 
 # **8\. IANA Considerations**
 
-## 8.1. No-Transport EDNS(0) Option
+## 8.1\. No-Transport EDNS(0) Option
 
 This document defines a new EDNS(0) option, entitled "No-Transport",
 assigned a value of TBD in the "DNS EDNS0 Option Codes (OPT)" registry.
@@ -410,7 +410,7 @@ occurrences of "(This document)" with a proper reference.
 
 # **9\. Acknowledgments**
 
-...
+* The participants of the DELEG Working Group
 
 --- back
 
