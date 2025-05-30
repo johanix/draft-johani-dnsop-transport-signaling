@@ -46,9 +46,11 @@ QUIC (DoQ)) directly within the additional section of authoritative
 DNS responses. This "hint-based" approach aims to enable recursive
 resolvers to discover and upgrade transport connections more
 efficiently, thereby improving privacy, security, and performance for
-subsequent interactions. The mechanism is designed to be safe,
-backward-compatible, and effective even when DNSSEC validation of the
-hint is not possible or desired.
+subsequent interactions. 
+
+The mechanism is designed to not require any protocol change. It is
+safe, backward-compatible, and effective even when DNSSEC validation
+of the hint is not possible or desired.
 
 TO BE REMOVED: This document is being collaborated on in Github at:
 [https://github.com/johanix/draft-johani-dnsop-transport-signaling](https://github.com/johanix/draft-johani-dnsop-transport-signaling).
@@ -126,6 +128,9 @@ condition 1\.
 supports one or more alternative transport protocols (e.g., DoT, DoH,
 DoQ) and is configured to advertise these capabilities.
 
+4. **Absence of the No-Transport Option:** The query does not
+include a No-Transport EDNS(0) option from the resolver.
+
 ### **3.1.1\. Multiple Server Identities**
 
 An authoritative nameserver may be known by multiple FQDNs (e.g.,
@@ -135,6 +140,57 @@ implementations MAY include a configuration mechanism (e.g., an
 identities list) where operators can list all FQDNs by which the
 server is known. This allows the server to correctly identify itself
 regardless of the specific name used in the NS RRset.
+
+## **3.3 The No-Transport EDNS(0) Option**
+
+To provide a mechanism for recursive resolvers to explicitly opt out of
+receiving transport signals, this document defines a new EDNS(0) option
+called "no-transport" (NT). When included in a query, this option
+signals to the authoritative server that the recursive resolver does
+not want to receive any transport signals in the response.
+
+The No-Transport option is structured as follows:
+
+~~~
+                                               1   1   1   1   1   1
+       0   1   2   3   4   5   6   7   8   9   0   1   2   3   4   5
+     +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+ 0:  |                            OPTION-CODE                        |
+     +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+ 2:  |                           OPTION-LENGTH                       |
+     +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+~~~
+
+Field definition details:
+
+OPTION-CODE:
+    2 octets / 16 bits (defined in {{!RFC6891}}) contains the value TBD
+    for No-Transport.
+
+OPTION-LENGTH:
+    2 octets / 16 bits (defined in {{!RFC6891}}) contains
+    the length of the payload in octets. For the No-Transport option,
+    this value MUST be 0 as there is no payload.
+
+When an authoritative server receives a query containing the EDNS(0) 
+No-Transport option, it SHOULD NOT include any OTS Hints in the response,
+regardless of whether it would normally do so based on the conditions
+described in Section 3.1.
+
+This option provides a clean way for recursive resolvers to opt out of
+receiving transport signals, which may be useful in scenarios where:
+
+* The recursive resolver has already established transport preferences
+  for a particular authoritative server
+* The recursive resolver does not support or does not want to use
+  alternative transports
+* The recursive resolver wants to minimize response sizes
+* The recursive resolver is operating in an environment where transport
+  signals are not needed or desired
+
+The No-Transport option is designed to be a simple, lightweight mechanism
+that can be used to disable transport signaling without affecting the
+normal operation of DNS resolution.
 
 ## **3.2\. Format of the OTS Hint**
 
@@ -150,8 +206,9 @@ triggered its inclusion (e.g., ns.dnsprovider.com.).
 * **TYPE:** SVCB.
 
 * **TTL:** The TTL of the SVCB record SHOULD be chosen by the
-authoritative server operator. A TTL similar to that of the NS record
-is RECOMMENDED.
+authoritative server operator. Choice of TTL is a local configuration
+decision, but unless the supported transports are subject to frequent
+change a value on the order of 24h or more is suggested.
 
 * **SVCB\_PRIORITY:** 1\. The specific priority value is not critical
 for this hint mechanism, but 1 indicates the highest priority for the
@@ -172,7 +229,7 @@ If ns.dnsprovider.com responds to a query for www.customer.com and
 ns.dnsprovider.com is listed in the NS RRset, the additional section
 may contain: `ns.dnsprovider.com. IN SVCB 1 . "alpn=doq,dot"`
 
-## **4\. Recursive Resolver Behavior**
+## **4\. Resolver Behavior**
 
 Recursive nameservers adopting this mechanism SHOULD implement the
 following logic:
@@ -208,13 +265,7 @@ scenarios like vanity names (e.g., ns.customer.com where customer.com
 is an unsigned zone, but the underlying server ns.dnsprovider.com is
 capable).
 
-4. **Caching:** Validated and unvalidated hints MAY be cached by the
-recursive resolver for a duration determined by their TTL or a local
-policy. Caching unvalidated hints SHOULD be done with care, and they
-SHOULD be invalidated quickly if a connection attempt based on them
-fails.
-
-5. **Prioritization:**
+4. **Prioritization:**
 
 * Any DNSSEC-validated SVCB record found via explicit query
 (e.g., ns.example.com for a queried domain MUST take precedence
@@ -224,10 +275,46 @@ over any unvalidated OTS Hint.
 opportunistically, not to override trusted delegation or service
 configuration.
 
-6. **Fallback:** Recursive resolvers MUST always be prepared to fall
+5. **Fallback:** Resolvers MUST always be prepared to fall
 back to traditional UDP/TCP transport if an attempt to use an
 alternative transport based on an OTS Hint (especially an
 unvalidated one) fails or times out.
+
+### 4.1 Resolver Caching Strategies
+
+Resolvers implementing this mechanism have several options for
+caching the transport signals received via OTS Hints. Each strategy has
+different trade-offs in terms of efficiency, responsiveness to changes,
+and resource usage:
+
+1. **Standard DNS Cache:** Treat the SVCB record like any other DNS
+   record, caching it according to its TTL. This is the simplest
+   approach and will simply cause the resolver to fall back to UDP for
+   one query if the transport signal data has expired.
+
+2. **Transport-Specific Cache:** Cache the transport signal until a
+   connection attempt fails, then invalidate the cache entry. This
+   approach is more responsive to transport availability changes but
+   may result in more connection attempts.
+
+3. **Success-Based Refresh:** Refresh the transport signal cache
+   entry each time a successful connection is made using that
+   transport. This provides a balance between efficiency and
+   responsiveness but requires additional bookkeeping.
+
+Given the variety of deployment scenarios and operational
+requirements, this document does not mandate a specific caching
+strategy. Implementers SHOULD choose a strategy that best fits their
+operational needs, considering factors such as:
+
+* The importance of minimizing connection attempts
+* The impact of failed connection attempts
+* The computational cost of different caching strategies
+* The memory requirements of maintaining cache state
+
+The chosen strategy SHOULD be documented in the implementation's
+configuration options to allow operators to make informed decisions
+about its use.
 
 # **5\. Comparison with DELEG**
 
@@ -257,7 +344,7 @@ here has the potential of enabling upgrading the transport for a
 significant fraction of the DNS traffic with a limited amount of
 effort.
 
-# **5\. Security Considerations**
+# **6\. Security Considerations**
 
 * **Spoofing of Unvalidated Hints:** A OTS Hint that cannot be
 DNSSEC validated (e.g., for ns.customer.com where customer.com is
@@ -285,7 +372,7 @@ DoQ for actual session security.
 in the Additional Section that they do not need, the OTS Hint will
 be ignored by everyone except recursive servers that understand the Hint.
 
-# **6\. Operational Considerations**
+# **7\. Operational Considerations**
 
 * **Response Size:** Including an SVCB record in the additional
 section will increase the size of UDP responses. Authoritative server
@@ -303,11 +390,25 @@ changes from recursive resolvers, and recursive resolvers can begin
 processing hints without requiring all authoritative servers to
 implement the feature.
 
-# **7\. IANA Considerations**
+# **8\. IANA Considerations**
 
-This document requires no IANA actions.
+## 8.1. No-Transport EDNS(0) Option
 
-# **8\. Acknowledgments**
+This document defines a new EDNS(0) option, entitled "No-Transport",
+assigned a value of TBD in the "DNS EDNS0 Option Codes (OPT)" registry.
+
+~~~
+   +-------+--------------------------+----------+----------------------+
+   | Value | Name                     | Status   | Reference            |
+   +-------+--------------------------+----------+----------------------+
+   | TBD   | No-Transport             | Standard | ( This document )    |
+   +-------+--------------------------+----------+----------------------+
+~~~
+
+**Note to the RFC Editor**: In this section, please replace
+occurrences of "(This document)" with a proper reference.
+
+# **9\. Acknowledgments**
 
 ...
 
