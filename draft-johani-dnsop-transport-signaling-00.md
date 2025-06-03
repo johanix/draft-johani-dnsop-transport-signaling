@@ -81,7 +81,8 @@ nameserver to directly convey its transport capabilities as a hint
 within the additional section of responses to queries where it
 identifies itself as an authoritative nameserver for the requested
 zone. This direct, in-band signaling provides a low-latency discovery
-path, even when a formal, validated signal is not available.
+path, even when a formal, validated signal is not available. Furthermore,
+this is achieved without any changes to the DNS Protocol.
 
 # **2\. Terminology**
 
@@ -111,7 +112,14 @@ The core of this proposal is for an authoritative nameserver to
 include an SVCB record in the additional section of its responses
 under specific conditions.
 
-## **3.1\. Trigger Conditions for Including the OTS Hint**
+This consists of three parts. The first two are the behaviour of the
+authoritative nameserver receiving the query and the rehaviour of the
+recursive nameserver receiving the response. The final part is a new
+EDNS(0) option that defines an OPT-OUT capability.
+
+# **4\. Authoritative Nameserver Behaviour**
+
+## **4.1\. Trigger Conditions for Including the OTS Hint**
 
 An authoritative nameserver SHOULD include an OTS Hint when *all* of
 the following conditions are met:
@@ -130,9 +138,13 @@ supports one or more alternative transport protocols (e.g., DoT, DoH,
 DoQ) and is configured to advertise these capabilities.
 
 4. **Absence of the No-Transport Option:** The query does not
-include a No-Transport EDNS(0) option from the resolver.
+include an EDNS(0) No-Transport option from the resolver.
 
-### **3.1.1\. Multiple Server Identities**
+5. **Availability of RRSIG SVCB:** If the zone in which the nameserver
+name is located is signed, only include the SVCB record if it is
+possible to also include the corresponding RRSIG SVCB.
+
+## **4.2\. Multiple Server Identities**
 
 An authoritative nameserver may be known by multiple FQDNs (e.g.,
 ns1.example.com, dns.customer.org, ns.cdnprovider.net). To facilitate
@@ -142,7 +154,169 @@ identities list) where operators can list all FQDNs by which the
 server is known. This allows the server to correctly identify itself
 regardless of the specific name used in the NS RRset.
 
-## **3.3 The No-Transport EDNS(0) Option**
+## **4.3\. Format of the OTS Hint**
+
+The OTS Hint MUST be an SVCB record with the following
+characteristics:
+
+* **OWNER:** The owner name of the SVCB record MUST be the FQDN of the
+authoritative nameserver itself, as identified in the NS RRset that
+triggered its inclusion (e.g., ns.dnsprovider.com.).
+
+* **CLASS:** IN (Internet).
+
+* **TYPE:** SVCB.
+
+* **TTL:** The TTL of the SVCB record SHOULD be chosen by the
+   authoritative server operator. Choice of TTL is a local configuration
+   decision, but unless the supported transports are subject to frequent
+   change a value on the order of 24h or more is suggested.
+
+* **SVCB\_PRIORITY:** 1\. The specific priority value is not critical
+   for this hint mechanism, but 1 indicates the highest priority for the
+   service.
+
+* **SVCB\_TARGET:** . (root). This indicates that the DNS transport
+   capabilities described by the SVCB record refer to the owner name of
+   the record.
+
+* **SVCB\_PARAMS:** A set of Service Parameters indicating the
+   supported transport protocols. In this document only the alpn
+   parameter {{!RFC9460}} is described, as relevant for signaling DoT
+   (alpn=dot), DoH (alpn=doh) and DoQ (alpn=doq). 
+
+   If any of the ipv4hint and ipv6hint parameters is present in the
+   SVCB parameter list then they SHOULD be ignored.
+
+**Example:**
+
+If ns.dnsprovider.net. responds to a query for www.example.com. and
+ns.dnsprovider.net is listed in the NS RRset, it may respond with a
+DNS message that contains:
+
+Header: ...
+
+Answer:
+www.example.com.   IN A 1.2.3.4
+
+Authority:
+example.com.       IN NS ns.example.com.
+example.com.       IN NS ns.dnsprovider.net.
+
+Additional:
+ns.dnsprovider.net. IN A 5.6.7.8
+ns.dnsprovider.net. IN RRSIG A ...
+ns.dnsprovider.net. IN SVCB 1 . "alpn=doq,dot"
+ns.dnsprovider.net. IN RRSIG SVCB ...
+
+# **5\. Recursive Nameserver Behavior**
+
+Recursive nameservers adopting this mechanism SHOULD implement the
+following logic:
+
+## **5.1\. When Sending Queries**
+
+1. **OPT-OUT Possibility:** If the resolver already thinks that it
+   knows the transport capabilities of the authoritative nameserver
+   it is about to send a query to it may opt out from DNS transport
+   signaling by including an EDNS(0) "No-Transport" option in the query.
+
+## **5.2\. When Receiving Responses**
+
+1. **Opportunistic Parsing:** When receiving an authoritative DNS
+   response, the resolver SHOULD parse the additional section for SVCB
+   records.
+
+2. **Owner Check:** If an SVCB record is found whose owner name
+   matches an authoritative nameserver identified in the Authority or
+   Answer sections of the *current* response, the resolver MAY consider
+   this an OTS Hint.
+
+3. **DNSSEC Validation (Optional but Recommended):**
+* The resolver SHOULD attempt to DNSSEC validate the OTS Hint. This
+involves validating the SVCB record itself and its corresponding RRSIG
+(if present) against the DNSSEC chain of trust for the zone that owns
+the SVCB record (e.g., dnsprovider.com for ns.dnsprovider.com).
+
+* If validation succeeds: The OTS Hint is considered a **trusted
+signal**. The resolver MAY then prefer the signaled alternative
+transports for subsequent queries to that specific authoritative
+nameserver.
+
+* If validation fails, or no RRSIG is present: The OTS Hint MUST
+be treated as an **unvalidated hint**. The resolver MAY still
+opportunistically attempt to use the signaled alternative transports,
+but MUST be prepared for immediate fallback to traditional transports
+(UDP/TCP) if the connection fails. This is particularly relevant for
+scenarios like vanity names (e.g., ns.customer.com where customer.com
+is an unsigned zone, but the underlying server ns.dnsprovider.com is
+capable).
+
+4. **Prioritization:**
+* Any DNSSEC-validated SVCB record found via explicit query (e.g.,
+ns.example.com for a queried domain MUST take precedence over any
+unvalidated OTS Hint.
+
+* The OTS Hint is a mechanism to *discover* capabilities
+opportunistically, not to override trusted delegation or service
+configuration.
+
+5. Fallback: Resolvers MUST always be prepared to fall back to
+traditional UDP/TCP transport if an attempt to use an alternative
+transport based on an OTS Hint (especially an unvalidated one) fails
+or times out.
+
+## **5.3\. Resolver Caching Strategies**
+
+Resolvers implementing the DNS OTS Hint mechanism have several options
+for caching the transport signals received via OTS Hints. 
+
+A suggested primary strategy is to set the EDNS(0) No-Transport option
+when no transport signaling information is needed (because the resolver
+already knows the authoritiative nameservers transport capabilities from
+a previous response or for some other reason). 
+
+Each strategy has different trade-offs in terms of efficiency,
+responsiveness to changes, and resource usage:
+
+1. **Standard DNS Cache:** Treat the SVCB record like any other DNS
+   record, caching it according to its TTL. This is the simplest
+   approach and will simply cause the resolver to fall back to UDP for
+   one query if the transport signal data has expired.
+
+2. **Cache-Until-Fail:** Cache the transport signal until a
+   connection attempt fails, then invalidate the cached entry. This
+   approach uses more aggressive caching based on the assumption that
+   changes to transport capabilites are expected to be rare, and there
+   is no risk of presenting any data that is no longer correct. The
+   possible downside is that with an "alpn=doq" the resolver will not
+   learn that, eg. the authoritative server later started to support
+   DNS-over-TLS (in addition to DoQ) if it is successfully using the
+   DNS-over-QUIC connection.
+
+3. **Success-Based Refresh:** Refresh the transport signal cache entry
+   each time a successful connection is made using that
+   transport. This provides a balance between efficiency and
+   responsiveness but requires additional bookkeeping.
+
+Note that the resolver always has the option of not using the EDNS(0)
+No-Transport whenever the cache entry is getting close to expiry.
+
+Given the variety of deployment scenarios and operational
+requirements, this document does not mandate a specific caching
+strategy. Implementers SHOULD choose a strategy that best fits their
+operational needs, considering factors such as:
+
+* The importance of minimizing connection attempts
+* The impact of failed connection attempts
+* The computational cost of different caching strategies
+* The memory requirements of maintaining cache state
+
+The chosen strategy SHOULD be documented in the implementation's
+configuration options to allow operators to make informed decisions
+about its use.
+
+# **6. The EDNS(0) No-Transport Option**
 
 To provide a mechanism for resolvers to explicitly opt out of
 receiving transport signals, this document defines a new EDNS(0)
@@ -150,7 +324,10 @@ option called "no-transport" (NT). When included in a query, this
 option signals to the authoritative server that the resolver does not
 want to receive any transport signals in the response.
 
-The No-Transport option is structured as follows:
+The typical use case is to set the EDNS(0) No-Transport option when
+the resolver already has the transport information it needs.
+
+The EDNS(0) No-Transport option is structured as follows:
 
 ~~~
                                                1   1   1   1   1   1
@@ -193,130 +370,7 @@ The No-Transport option is designed to be a simple, lightweight
 mechanism that can be used to disable transport signaling without
 affecting the normal operation of DNS resolution.
 
-## **3.2\. Format of the OTS Hint**
-
-The OTS Hint MUST be an SVCB record with the following
-characteristics:
-
-* **OWNER:** The owner name of the SVCB record MUST be the FQDN of the
-authoritative nameserver itself, as identified in the NS RRset that
-triggered its inclusion (e.g., ns.dnsprovider.com.).
-
-* **CLASS:** IN (Internet).
-
-* **TYPE:** SVCB.
-
-* **TTL:** The TTL of the SVCB record SHOULD be chosen by the
-authoritative server operator. Choice of TTL is a local configuration
-decision, but unless the supported transports are subject to frequent
-change a value on the order of 24h or more is suggested.
-
-* **SVCB\_PRIORITY:** 1\. The specific priority value is not critical
-for this hint mechanism, but 1 indicates the highest priority for the
-service.
-
-* **SVCB\_TARGET:** . (root). This indicates that the DNS transport
-capabilities described by the SVCB record refer to the owner name of
-the record.
-
-* **SVCB\_PARAMS:** A set of Service Parameters indicating the
-supported transport protocols. In this document only the alpn
-parameter {{!RFC9460}} is described, as relevant for signaling DoT
-(alpn=dot), DoH (alpn=doh) and DoQ (alpn=doq).
-
-**Example:**
-
-If ns.dnsprovider.com responds to a query for www.customer.com and
-ns.dnsprovider.com is listed in the NS RRset, the additional section
-may contain: `ns.dnsprovider.com. IN SVCB 1 . "alpn=doq,dot"`
-
-## **4\. Resolver Behavior**
-
-Recursive nameservers adopting this mechanism SHOULD implement the
-following logic:
-
-1. **Opportunistic Parsing:** When receiving an authoritative DNS
-response, the resolver SHOULD parse the additional section for SVCB
-records.
-
-2. **Owner Check:** If an SVCB record is found whose owner name
-matches an authoritative nameserver identified in the Authority or
-Answer sections of the *current* response, the resolver MAY consider
-this an OTS Hint.
-
-3. **DNSSEC Validation (Optional but Recommended):**
-
-* The resolver SHOULD attempt to DNSSEC validate the OTS Hint. This
-involves validating the SVCB record itself and its corresponding RRSIG
-(if present) against the DNSSEC chain of trust for the zone that owns
-the SVCB record (e.g., dnsprovider.com for ns.dnsprovider.com).
-
-* **If validation succeeds:** The OTS Hint is considered a **trusted
-signal**. The resolver MAY then prefer the signaled alternative
-transports for subsequent queries to that specific authoritative
-nameserver.
-
-* **If validation fails, or no RRSIG is present:** The OTS Hint MUST
-be treated as an **unvalidated hint**. The resolver MAY still
-opportunistically attempt to use the signaled alternative transports,
-but MUST be prepared for immediate fallback to traditional transports
-(UDP/TCP) if the connection fails. This is particularly relevant for
-scenarios like vanity names (e.g., ns.customer.com where customer.com
-is an unsigned zone, but the underlying server ns.dnsprovider.com is
-capable).
-
-4. **Prioritization:**
-
-* Any DNSSEC-validated SVCB record found via explicit query (e.g.,
-ns.example.com for a queried domain MUST take precedence over any
-unvalidated OTS Hint.
-
-* The OTS Hint is a mechanism to *discover* capabilities
-opportunistically, not to override trusted delegation or service
-configuration.
-
-5. **Fallback:** Resolvers MUST always be prepared to fall back to
-traditional UDP/TCP transport if an attempt to use an alternative
-transport based on an OTS Hint (especially an unvalidated one) fails
-or times out.
-
-### 4.1 Resolver Caching Strategies
-
-Resolvers implementing this mechanism have several options for caching
-the transport signals received via OTS Hints. Each strategy has
-different trade-offs in terms of efficiency, responsiveness to
-changes, and resource usage:
-
-1. **Standard DNS Cache:** Treat the SVCB record like any other DNS
-   record, caching it according to its TTL. This is the simplest
-   approach and will simply cause the resolver to fall back to UDP for
-   one query if the transport signal data has expired.
-
-2. **Transport-Specific Cache:** Cache the transport signal until a
-   connection attempt fails, then invalidate the cache entry. This
-   approach is more responsive to transport availability changes but
-   may result in more connection attempts.
-
-3. **Success-Based Refresh:** Refresh the transport signal cache entry
-   each time a successful connection is made using that
-   transport. This provides a balance between efficiency and
-   responsiveness but requires additional bookkeeping.
-
-Given the variety of deployment scenarios and operational
-requirements, this document does not mandate a specific caching
-strategy. Implementers SHOULD choose a strategy that best fits their
-operational needs, considering factors such as:
-
-* The importance of minimizing connection attempts
-* The impact of failed connection attempts
-* The computational cost of different caching strategies
-* The memory requirements of maintaining cache state
-
-The chosen strategy SHOULD be documented in the implementation's
-configuration options to allow operators to make informed decisions
-about its use.
-
-# **5\. Comparison with DELEG**
+# **7\. Comparison with DELEG**
 
 The idea to use an SVCB alpn parameter for transport signaling
 originated with the work on DELEG {{?I-D.draft-ietf-deleg}}.  The
@@ -344,10 +398,10 @@ here has the potential of enabling upgrading the transport for a
 significant fraction of the DNS traffic with a limited amount of
 effort.
 
-# **6\. Security Considerations**
+# **8\. Security Considerations**
 
 * **Spoofing of Unvalidated Hints:** A OTS Hint that cannot be DNSSEC
-validated (e.g., for ns.customer.com where customer.com is unsigned)
+validated (e.g., for ns.example.com where example.com is unsigned)
 is susceptible to spoofing by an on-path attacker. Such an attacker
 could insert a fake SVCB record advertising a non-existing transport,
 thereby denying connection over that transport. However, since the
@@ -359,8 +413,8 @@ TLS/QUIC (via X.509 certificates) for DoT/DoQ would still protect the
 integrity and privacy of the connection itself.
 
 * **DNSSEC Validation:** When a OTS Hint is signed by DNSSEC (e.g.,
-ns.dnsprovider.com SVCB record from a signed dnsprovider.com zone), it
-provides a trusted signal. Resolvers SHOULD leverage DNSSEC validation
+the ns.dnsprovider.net SVCB record from a signed dnsprovider.net zone),
+it provides a trusted signal. Resolvers SHOULD leverage DNSSEC validation
 to distinguish between trusted and unvalidated hints.
 
 * **No New Attack Vectors:** This mechanism does not introduce new
@@ -373,13 +427,15 @@ data in the Additional Section that they do not need, the OTS Hint
 will be ignored by everyone except recursive nameservers that
 understand the OTS Hint.
 
-# **7\. Operational Considerations**
+# **9\. Operational Considerations**
 
 * **Response Size:** Including an SVCB record in the additional
 section will increase the size of UDP responses. Authoritative server
 operators should consider the potential for UDP fragmentation or TCP
 fallback if responses become excessively large, though a single SVCB
-record is typically small.
+record is typically small. Recursive nameservers should usually set
+the EDNS(0) No-Transport when they already has the transport signaling
+information.
 
 * **Server Configuration:** Authoritative server implementations will
 need configuration options to enable this feature and manage the
@@ -390,9 +446,9 @@ Authoritative servers can begin sending hints without requiring
 changes from resolvers, and resolvers can begin processing hints
 without requiring all authoritative servers to implement the feature.
 
-# **8\. IANA Considerations**
+# **10\. IANA Considerations**
 
-## 8.1\. No-Transport EDNS(0) Option
+## 10.1\. No-Transport EDNS(0) Option
 
 This document defines a new EDNS(0) option, entitled "No-Transport",
 assigned a value of TBD in the "DNS EDNS0 Option Codes (OPT)" registry.
@@ -408,7 +464,7 @@ assigned a value of TBD in the "DNS EDNS0 Option Codes (OPT)" registry.
 **Note to the RFC Editor**: In this section, please replace
 occurrences of "(This document)" with a proper reference.
 
-# **9\. Acknowledgments**
+# **11\. Acknowledgments**
 
 * The participants of the DELEG Working Group
 

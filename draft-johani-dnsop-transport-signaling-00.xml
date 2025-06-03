@@ -108,7 +108,8 @@ nameserver to directly convey its transport capabilities as a hint
 within the additional section of responses to queries where it
 identifies itself as an authoritative nameserver for the requested
 zone. This direct, in-band signaling provides a low-latency discovery
-path, even when a formal, validated signal is not available.</t>
+path, even when a formal, validated signal is not available. Furthermore,
+this is achieved without any changes to the DNS Protocol.</t>
 
 </section>
 <section anchor="terminology"><name><strong>2. Terminology</strong></name>
@@ -139,7 +140,15 @@ capabilities.</t>
 include an SVCB record in the additional section of its responses
 under specific conditions.</t>
 
-<section anchor="trigger-conditions-for-including-the-ots-hint"><name><strong>3.1. Trigger Conditions for Including the OTS Hint</strong></name>
+<t>This consists of three parts. The first two are the behaviour of the
+authoritative nameserver receiving the query and the rehaviour of the
+recursive nameserver receiving the response. The final part is a new
+EDNS(0) option that defines an OPT-OUT capability.</t>
+
+</section>
+<section anchor="authoritative-nameserver-behaviour"><name><strong>4. Authoritative Nameserver Behaviour</strong></name>
+
+<section anchor="trigger-conditions-for-including-the-ots-hint"><name><strong>4.1. Trigger Conditions for Including the OTS Hint</strong></name>
 
 <t>An authoritative nameserver SHOULD include an OTS Hint when <em>all</em> of
 the following conditions are met:</t>
@@ -156,10 +165,14 @@ condition 1.</t>
 supports one or more alternative transport protocols (e.g., DoT, DoH,
 DoQ) and is configured to advertise these capabilities.</t>
   <t><strong>Absence of the No-Transport Option:</strong> The query does not
-include a No-Transport EDNS(0) option from the resolver.</t>
+include an EDNS(0) No-Transport option from the resolver.</t>
+  <t><strong>Availability of RRSIG SVCB:</strong> If the zone in which the nameserver
+name is located is signed, only include the SVCB record if it is
+possible to also include the corresponding RRSIG SVCB.</t>
 </list></t>
 
-<section anchor="multiple-server-identities"><name><strong>3.1.1. Multiple Server Identities</strong></name>
+</section>
+<section anchor="multiple-server-identities"><name><strong>4.2. Multiple Server Identities</strong></name>
 
 <t>An authoritative nameserver may be known by multiple FQDNs (e.g.,
 ns1.example.com, dns.customer.org, ns.cdnprovider.net). To facilitate
@@ -170,8 +183,181 @@ server is known. This allows the server to correctly identify itself
 regardless of the specific name used in the NS RRset.</t>
 
 </section>
+<section anchor="format-of-the-ots-hint"><name><strong>4.3. Format of the OTS Hint</strong></name>
+
+<t>The OTS Hint MUST be an SVCB record with the following
+characteristics:</t>
+
+<t><list style="symbols">
+  <t><strong>OWNER:</strong> The owner name of the SVCB record MUST be the FQDN of the
+authoritative nameserver itself, as identified in the NS RRset that
+triggered its inclusion (e.g., ns.dnsprovider.com.).</t>
+  <t><strong>CLASS:</strong> IN (Internet).</t>
+  <t><strong>TYPE:</strong> SVCB.</t>
+  <t><strong>TTL:</strong> The TTL of the SVCB record SHOULD be chosen by the
+ authoritative server operator. Choice of TTL is a local configuration
+ decision, but unless the supported transports are subject to frequent
+ change a value on the order of 24h or more is suggested.</t>
+  <t><strong>SVCB_PRIORITY:</strong> 1. The specific priority value is not critical
+ for this hint mechanism, but 1 indicates the highest priority for the
+ service.</t>
+  <t><strong>SVCB_TARGET:</strong> . (root). This indicates that the DNS transport
+ capabilities described by the SVCB record refer to the owner name of
+ the record.</t>
+  <t><strong>SVCB_PARAMS:</strong> A set of Service Parameters indicating the
+ supported transport protocols. In this document only the alpn
+ parameter <xref target="RFC9460"/> is described, as relevant for signaling DoT
+ (alpn=dot), DoH (alpn=doh) and DoQ (alpn=doq).  <vspace blankLines='1'/>
+If any of the ipv4hint and ipv6hint parameters is present in the
+ SVCB parameter list then they SHOULD be ignored.</t>
+</list></t>
+
+<t><strong>Example:</strong></t>
+
+<t>If ns.dnsprovider.net. responds to a query for www.example.com. and
+ns.dnsprovider.net is listed in the NS RRset, it may respond with a
+DNS message that contains:</t>
+
+<t>Header: ...</t>
+
+<t>Answer:
+www.example.com.   IN A 1.2.3.4</t>
+
+<t>Authority:
+example.com.       IN NS ns.example.com.
+example.com.       IN NS ns.dnsprovider.net.</t>
+
+<t>Additional:
+ns.dnsprovider.net. IN A 5.6.7.8
+ns.dnsprovider.net. IN RRSIG A ...
+ns.dnsprovider.net. IN SVCB 1 . "alpn=doq,dot"
+ns.dnsprovider.net. IN RRSIG SVCB ...</t>
+
 </section>
-<section anchor="the-no-transport-edns0-option"><name><strong>3.3 The No-Transport EDNS(0) Option</strong></name>
+</section>
+<section anchor="recursive-nameserver-behavior"><name><strong>5. Recursive Nameserver Behavior</strong></name>
+
+<t>Recursive nameservers adopting this mechanism SHOULD implement the
+following logic:</t>
+
+<section anchor="when-sending-queries"><name><strong>5.1. When Sending Queries</strong></name>
+
+<t><list style="numbers" type="1">
+  <t><strong>OPT-OUT Possibility:</strong> If the resolver already thinks that it
+knows the transport capabilities of the authoritative nameserver
+it is about to send a query to it may opt out from DNS transport
+signaling by including an EDNS(0) "No-Transport" option in the query.</t>
+</list></t>
+
+</section>
+<section anchor="when-receiving-responses"><name><strong>5.2. When Receiving Responses</strong></name>
+
+<t><list style="numbers" type="1">
+  <t><strong>Opportunistic Parsing:</strong> When receiving an authoritative DNS
+response, the resolver SHOULD parse the additional section for SVCB
+records.</t>
+  <t><strong>Owner Check:</strong> If an SVCB record is found whose owner name
+matches an authoritative nameserver identified in the Authority or
+Answer sections of the <em>current</em> response, the resolver MAY consider
+this an OTS Hint.</t>
+  <t><strong>DNSSEC Validation (Optional but Recommended):</strong>
+* The resolver SHOULD attempt to DNSSEC validate the OTS Hint. This
+involves validating the SVCB record itself and its corresponding RRSIG
+(if present) against the DNSSEC chain of trust for the zone that owns
+the SVCB record (e.g., dnsprovider.com for ns.dnsprovider.com).</t>
+</list></t>
+
+<t><list style="symbols">
+  <t>If validation succeeds: The OTS Hint is considered a <strong>trusted
+signal</strong>. The resolver MAY then prefer the signaled alternative
+transports for subsequent queries to that specific authoritative
+nameserver.</t>
+  <t>If validation fails, or no RRSIG is present: The OTS Hint MUST
+be treated as an <strong>unvalidated hint</strong>. The resolver MAY still
+opportunistically attempt to use the signaled alternative transports,
+but MUST be prepared for immediate fallback to traditional transports
+(UDP/TCP) if the connection fails. This is particularly relevant for
+scenarios like vanity names (e.g., ns.customer.com where customer.com
+is an unsigned zone, but the underlying server ns.dnsprovider.com is
+capable).</t>
+</list></t>
+
+<t><list style="numbers" type="1">
+  <t><strong>Prioritization:</strong>
+* Any DNSSEC-validated SVCB record found via explicit query (e.g.,
+ns.example.com for a queried domain MUST take precedence over any
+unvalidated OTS Hint.</t>
+</list></t>
+
+<t><list style="symbols">
+  <t>The OTS Hint is a mechanism to <em>discover</em> capabilities
+opportunistically, not to override trusted delegation or service
+configuration.</t>
+</list></t>
+
+<t><list style="numbers" type="1">
+  <t>Fallback: Resolvers MUST always be prepared to fall back to
+traditional UDP/TCP transport if an attempt to use an alternative
+transport based on an OTS Hint (especially an unvalidated one) fails
+or times out.</t>
+</list></t>
+
+</section>
+<section anchor="resolver-caching-strategies"><name><strong>5.3. Resolver Caching Strategies</strong></name>
+
+<t>Resolvers implementing the DNS OTS Hint mechanism have several options
+for caching the transport signals received via OTS Hints.</t>
+
+<t>A suggested primary strategy is to set the EDNS(0) No-Transport option
+when no transport signaling information is needed (because the resolver
+already knows the authoritiative nameservers transport capabilities from
+a previous response or for some other reason).</t>
+
+<t>Each strategy has different trade-offs in terms of efficiency,
+responsiveness to changes, and resource usage:</t>
+
+<t><list style="numbers" type="1">
+  <t><strong>Standard DNS Cache:</strong> Treat the SVCB record like any other DNS
+record, caching it according to its TTL. This is the simplest
+approach and will simply cause the resolver to fall back to UDP for
+one query if the transport signal data has expired.</t>
+  <t><strong>Cache-Until-Fail:</strong> Cache the transport signal until a
+connection attempt fails, then invalidate the cached entry. This
+approach uses more aggressive caching based on the assumption that
+changes to transport capabilites are expected to be rare, and there
+is no risk of presenting any data that is no longer correct. The
+possible downside is that with an "alpn=doq" the resolver will not
+learn that, eg. the authoritative server later started to support
+DNS-over-TLS (in addition to DoQ) if it is successfully using the
+DNS-over-QUIC connection.</t>
+  <t><strong>Success-Based Refresh:</strong> Refresh the transport signal cache entry
+each time a successful connection is made using that
+transport. This provides a balance between efficiency and
+responsiveness but requires additional bookkeeping.</t>
+</list></t>
+
+<t>Note that the resolver always has the option of not using the EDNS(0)
+No-Transport whenever the cache entry is getting close to expiry.</t>
+
+<t>Given the variety of deployment scenarios and operational
+requirements, this document does not mandate a specific caching
+strategy. Implementers SHOULD choose a strategy that best fits their
+operational needs, considering factors such as:</t>
+
+<t><list style="symbols">
+  <t>The importance of minimizing connection attempts</t>
+  <t>The impact of failed connection attempts</t>
+  <t>The computational cost of different caching strategies</t>
+  <t>The memory requirements of maintaining cache state</t>
+</list></t>
+
+<t>The chosen strategy SHOULD be documented in the implementation's
+configuration options to allow operators to make informed decisions
+about its use.</t>
+
+</section>
+</section>
+<section anchor="the-edns0-no-transport-option"><name><strong>6. The EDNS(0) No-Transport Option</strong></name>
 
 <t>To provide a mechanism for resolvers to explicitly opt out of
 receiving transport signals, this document defines a new EDNS(0)
@@ -179,7 +365,10 @@ option called "no-transport" (NT). When included in a query, this
 option signals to the authoritative server that the resolver does not
 want to receive any transport signals in the response.</t>
 
-<t>The No-Transport option is structured as follows:</t>
+<t>The typical use case is to set the EDNS(0) No-Transport option when
+the resolver already has the transport information it needs.</t>
+
+<t>The EDNS(0) No-Transport option is structured as follows:</t>
 
 <figure><artwork><![CDATA[
                                                1   1   1   1   1   1
@@ -225,137 +414,7 @@ mechanism that can be used to disable transport signaling without
 affecting the normal operation of DNS resolution.</t>
 
 </section>
-<section anchor="format-of-the-ots-hint"><name><strong>3.2. Format of the OTS Hint</strong></name>
-
-<t>The OTS Hint MUST be an SVCB record with the following
-characteristics:</t>
-
-<t><list style="symbols">
-  <t><strong>OWNER:</strong> The owner name of the SVCB record MUST be the FQDN of the
-authoritative nameserver itself, as identified in the NS RRset that
-triggered its inclusion (e.g., ns.dnsprovider.com.).</t>
-  <t><strong>CLASS:</strong> IN (Internet).</t>
-  <t><strong>TYPE:</strong> SVCB.</t>
-  <t><strong>TTL:</strong> The TTL of the SVCB record SHOULD be chosen by the
-authoritative server operator. Choice of TTL is a local configuration
-decision, but unless the supported transports are subject to frequent
-change a value on the order of 24h or more is suggested.</t>
-  <t><strong>SVCB_PRIORITY:</strong> 1. The specific priority value is not critical
-for this hint mechanism, but 1 indicates the highest priority for the
-service.</t>
-  <t><strong>SVCB_TARGET:</strong> . (root). This indicates that the DNS transport
-capabilities described by the SVCB record refer to the owner name of
-the record.</t>
-  <t><strong>SVCB_PARAMS:</strong> A set of Service Parameters indicating the
-supported transport protocols. In this document only the alpn
-parameter <xref target="RFC9460"/> is described, as relevant for signaling DoT
-(alpn=dot), DoH (alpn=doh) and DoQ (alpn=doq).</t>
-</list></t>
-
-<t><strong>Example:</strong></t>
-
-<t>If ns.dnsprovider.com responds to a query for www.customer.com and
-ns.dnsprovider.com is listed in the NS RRset, the additional section
-may contain: <spanx style="verb">ns.dnsprovider.com. IN SVCB 1 . "alpn=doq,dot"</spanx></t>
-
-</section>
-<section anchor="resolver-behavior"><name><strong>4. Resolver Behavior</strong></name>
-
-<t>Recursive nameservers adopting this mechanism SHOULD implement the
-following logic:</t>
-
-<t><list style="numbers" type="1">
-  <t><strong>Opportunistic Parsing:</strong> When receiving an authoritative DNS
-response, the resolver SHOULD parse the additional section for SVCB
-records.</t>
-  <t><strong>Owner Check:</strong> If an SVCB record is found whose owner name
-matches an authoritative nameserver identified in the Authority or
-Answer sections of the <em>current</em> response, the resolver MAY consider
-this an OTS Hint.</t>
-  <t><strong>DNSSEC Validation (Optional but Recommended):</strong></t>
-</list></t>
-
-<t><list style="symbols">
-  <t>The resolver SHOULD attempt to DNSSEC validate the OTS Hint. This
-involves validating the SVCB record itself and its corresponding RRSIG
-(if present) against the DNSSEC chain of trust for the zone that owns
-the SVCB record (e.g., dnsprovider.com for ns.dnsprovider.com).</t>
-  <t><strong>If validation succeeds:</strong> The OTS Hint is considered a <strong>trusted
-signal</strong>. The resolver MAY then prefer the signaled alternative
-transports for subsequent queries to that specific authoritative
-nameserver.</t>
-  <t><strong>If validation fails, or no RRSIG is present:</strong> The OTS Hint MUST
-be treated as an <strong>unvalidated hint</strong>. The resolver MAY still
-opportunistically attempt to use the signaled alternative transports,
-but MUST be prepared for immediate fallback to traditional transports
-(UDP/TCP) if the connection fails. This is particularly relevant for
-scenarios like vanity names (e.g., ns.customer.com where customer.com
-is an unsigned zone, but the underlying server ns.dnsprovider.com is
-capable).</t>
-</list></t>
-
-<t><list style="numbers" type="1">
-  <t><strong>Prioritization:</strong></t>
-</list></t>
-
-<t><list style="symbols">
-  <t>Any DNSSEC-validated SVCB record found via explicit query (e.g.,
-ns.example.com for a queried domain MUST take precedence over any
-unvalidated OTS Hint.</t>
-  <t>The OTS Hint is a mechanism to <em>discover</em> capabilities
-opportunistically, not to override trusted delegation or service
-configuration.</t>
-</list></t>
-
-<t><list style="numbers" type="1">
-  <t><strong>Fallback:</strong> Resolvers MUST always be prepared to fall back to
-traditional UDP/TCP transport if an attempt to use an alternative
-transport based on an OTS Hint (especially an unvalidated one) fails
-or times out.</t>
-</list></t>
-
-<section anchor="resolver-caching-strategies"><name>4.1 Resolver Caching Strategies</name>
-
-<t>Resolvers implementing this mechanism have several options for caching
-the transport signals received via OTS Hints. Each strategy has
-different trade-offs in terms of efficiency, responsiveness to
-changes, and resource usage:</t>
-
-<t><list style="numbers" type="1">
-  <t><strong>Standard DNS Cache:</strong> Treat the SVCB record like any other DNS
-record, caching it according to its TTL. This is the simplest
-approach and will simply cause the resolver to fall back to UDP for
-one query if the transport signal data has expired.</t>
-  <t><strong>Transport-Specific Cache:</strong> Cache the transport signal until a
-connection attempt fails, then invalidate the cache entry. This
-approach is more responsive to transport availability changes but
-may result in more connection attempts.</t>
-  <t><strong>Success-Based Refresh:</strong> Refresh the transport signal cache entry
-each time a successful connection is made using that
-transport. This provides a balance between efficiency and
-responsiveness but requires additional bookkeeping.</t>
-</list></t>
-
-<t>Given the variety of deployment scenarios and operational
-requirements, this document does not mandate a specific caching
-strategy. Implementers SHOULD choose a strategy that best fits their
-operational needs, considering factors such as:</t>
-
-<t><list style="symbols">
-  <t>The importance of minimizing connection attempts</t>
-  <t>The impact of failed connection attempts</t>
-  <t>The computational cost of different caching strategies</t>
-  <t>The memory requirements of maintaining cache state</t>
-</list></t>
-
-<t>The chosen strategy SHOULD be documented in the implementation's
-configuration options to allow operators to make informed decisions
-about its use.</t>
-
-</section>
-</section>
-</section>
-<section anchor="comparison-with-deleg"><name><strong>5. Comparison with DELEG</strong></name>
+<section anchor="comparison-with-deleg"><name><strong>7. Comparison with DELEG</strong></name>
 
 <t>The idea to use an SVCB alpn parameter for transport signaling
 originated with the work on DELEG <xref target="I-D.draft-ietf-deleg"/>.  The
@@ -384,11 +443,11 @@ significant fraction of the DNS traffic with a limited amount of
 effort.</t>
 
 </section>
-<section anchor="security-considerations"><name><strong>6. Security Considerations</strong></name>
+<section anchor="security-considerations"><name><strong>8. Security Considerations</strong></name>
 
 <t><list style="symbols">
   <t><strong>Spoofing of Unvalidated Hints:</strong> A OTS Hint that cannot be DNSSEC
-validated (e.g., for ns.customer.com where customer.com is unsigned)
+validated (e.g., for ns.example.com where example.com is unsigned)
 is susceptible to spoofing by an on-path attacker. Such an attacker
 could insert a fake SVCB record advertising a non-existing transport,
 thereby denying connection over that transport. However, since the
@@ -399,8 +458,8 @@ actual DNS data remains unaffected. The cryptographic validation of
 TLS/QUIC (via X.509 certificates) for DoT/DoQ would still protect the
 integrity and privacy of the connection itself.</t>
   <t><strong>DNSSEC Validation:</strong> When a OTS Hint is signed by DNSSEC (e.g.,
-ns.dnsprovider.com SVCB record from a signed dnsprovider.com zone), it
-provides a trusted signal. Resolvers SHOULD leverage DNSSEC validation
+the ns.dnsprovider.net SVCB record from a signed dnsprovider.net zone),
+it provides a trusted signal. Resolvers SHOULD leverage DNSSEC validation
 to distinguish between trusted and unvalidated hints.</t>
   <t><strong>No New Attack Vectors:</strong> This mechanism does not introduce new
 attack vectors for DNS data itself, as it primarily concerns transport
@@ -413,14 +472,16 @@ understand the OTS Hint.</t>
 </list></t>
 
 </section>
-<section anchor="operational-considerations"><name><strong>7. Operational Considerations</strong></name>
+<section anchor="operational-considerations"><name><strong>9. Operational Considerations</strong></name>
 
 <t><list style="symbols">
   <t><strong>Response Size:</strong> Including an SVCB record in the additional
 section will increase the size of UDP responses. Authoritative server
 operators should consider the potential for UDP fragmentation or TCP
 fallback if responses become excessively large, though a single SVCB
-record is typically small.</t>
+record is typically small. Recursive nameservers should usually set
+the EDNS(0) No-Transport when they already has the transport signaling
+information.</t>
   <t><strong>Server Configuration:</strong> Authoritative server implementations will
 need configuration options to enable this feature and manage the
 identities list.</t>
@@ -431,9 +492,9 @@ without requiring all authoritative servers to implement the feature.</t>
 </list></t>
 
 </section>
-<section anchor="iana-considerations"><name><strong>8. IANA Considerations</strong></name>
+<section anchor="iana-considerations"><name><strong>10. IANA Considerations</strong></name>
 
-<section anchor="no-transport-edns0-option"><name>8.1. No-Transport EDNS(0) Option</name>
+<section anchor="no-transport-edns0-option"><name>10.1. No-Transport EDNS(0) Option</name>
 
 <t>This document defines a new EDNS(0) option, entitled "No-Transport",
 assigned a value of TBD in the "DNS EDNS0 Option Codes (OPT)" registry.</t>
@@ -451,7 +512,7 @@ occurrences of "(This document)" with a proper reference.</t>
 
 </section>
 </section>
-<section anchor="acknowledgments"><name><strong>9. Acknowledgments</strong></name>
+<section anchor="acknowledgments"><name><strong>11. Acknowledgments</strong></name>
 
 <t><list style="symbols">
   <t>The participants of the DELEG Working Group</t>
@@ -627,7 +688,7 @@ occurrences of "(This document)" with a proper reference.</t>
 </references>
 
 
-<?line 415?>
+<?line 471?>
 
 <section anchor="change-history-to-be-removed-before-publication"><name>Change History (to be removed before publication)</name>
 
@@ -641,148 +702,166 @@ occurrences of "(This document)" with a proper reference.</t>
   </back>
 
 <!-- ##markdown-source:
-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
-/wDe+EewAkMAAA==
+H4sIAAAAAAAAA7Vc7XLbRrL9P08xV/mxkpakJcV2bFbdD1mSbW3ZkiLSyd3a
+3doCgSGJFQhwMaAUJnEe677AfbHbp3tmMOCHs1ubmyo5FAgMenq6T5/u6VG/
+31dN3hRmqA/OV828qvMmafJHoy9vRnpcJ6VdVnWjR/msTIq8nB2oZDKpzSPd
+v/eOrErLZEFDZnUybfp/q+ZJmfez0lbLfuMf6Fv/QP/kRGVJQ/f/dHk+vvqs
+UvplVtXrobZNplS+rIe6qVe2OTs5eX1yppLaJEN9XTamLk2jnqr6YVZXq+UQ
+Qt/e6e/pAo2r3+GiejBruiNrH+hfQiylbJOU2V+Toirp1Wtj1TIf6j81VdrT
+lgSszdTSp/UCH/6iVMLqGSrdV1rnpR3qPwz0qDEljbOgSzLlP2Cy8eWqntHs
+fySlVuVQj+dGj55Mltt5kEe/rVZlxjfQ/Sn90mDuuM3gilkkeTHUrMaBdSP/
+V+6etk0+bUxhDX1nIuE+DPRbuoGmaH4M0n0wVdm5/JtJV9DIg6kf+Veluxro
+N6ae2ab+3/9plXdV5w/d67+ZfIaGHkxk6Gqf9lRZ1Qs2/yGZXTmNfuv3+zqZ
+0MNJSqYznudWk5mvFqZs9LKulpU1Vid6YVIYu11oelgnWx5lTf1oaqubSlVL
+uMGKbm7yNCmKtRaP0M3c5LW2K/5exikgrYwSHEjRa8lYq8LqQzOYDXr8goqG
+1+MPI314WY2Pomvvx+M7vvr+SNMahS/Ut5+uL3D926MjneW1SRsS5Slv5nkJ
+UXSSZTm0S5JZ+pI+6WranZrCYLUhsUpSw0Czeg5ogKY/SazJDnSyJGmTdK6T
+fIHZa1Mmk8LgoarwGqF1TVlWyLdazuoki+ZLa1uWIoDVi6o22kyneZrTChTr
+HkStzWSt8gW96RHuv6zzxySlr0jsFYlKnzDw0tS8sGVqWLl2NbHm7ysaRrFV
+JPKKAVbZRAuKFTdYIpNhAmXVkPR/X5HGaNi19quhcf/MDPR1Q48om0xNT0+S
+9OEpqbN+Wi2WpDKaughDU8CUaF3Noyn105z+IWWOri70I4Gjs2vSN1YCCoUY
+eDUZnMUw5CEsVm0ySHyr31zp+6uPt99dXQ5110zp88RAMSRlkUyqmmA207Sc
+tNDvaL1XE500Q/WnedMs7fDZsxlfG5DIzwTCf3j2jwH6Xw7/5SGOBqL9ykLL
+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
+TAAA
 
 -->
 
