@@ -91,7 +91,7 @@ available there.  The authors (gratefully) accept pull requests.</t>
 
 <?line 65?>
 
-<section anchor="introduction"><name><strong>1. Introduction</strong></name>
+<section anchor="introduction"><name>1. Introduction</name>
 
 <t>The Domain Name System (DNS) primarily relies on UDP and TCP for
 communication between resolvers and authoritative servers.  While
@@ -116,13 +116,12 @@ zone. This direct, in-band signaling provides a low-latency discovery
 path, even when a formal, validated signal is not available. Furthermore,
 this is achieved without any changes to the DNS Protocol.</t>
 
-</section>
-<section anchor="prior-art"><name><strong>1.1. Prior Art</strong></name>
+<section anchor="prior-art"><name>1.1. Prior Art</name>
 
 <t>An attempt at utilizing more modern, and in particular, more private
 transports between resolvers and authoritative nameservers was introduced
 in <xref target="RFC9539"/>. The idea there was to opportunistically try to send the
-query to the authoritative nameserver over multiple transports with no 
+query to the authoritative nameserver over multiple transports with no
 prior knowledge of whether a transport was supported in the receiving end
 or not.</t>
 
@@ -144,7 +143,7 @@ the current DNS protocol. Therefore the transport signaling provided will
 be opportunistic, and as such fit well as an improvement to <xref target="RFC9539"/>.</t>
 
 </section>
-<section anchor="rationale-for-using-the-additional-section"><name><strong>Rationale for Using the Additional Section</strong></name>
+<section anchor="rationale-for-using-the-additional-section"><name>Rationale for Using the Additional Section</name>
 
 <t><strong>Note to the RFC Editor</strong>: Please remove this entire section before publication.</t>
 
@@ -183,7 +182,8 @@ advertised transport will be remembered by the resolver (for some suitable time)
 vastly more benefits than drawbacks.</t>
 
 </section>
-<section anchor="terminology"><name><strong>2. Terminology</strong></name>
+</section>
+<section anchor="terminology"><name>2. Terminology</name>
 
 <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
@@ -205,7 +205,7 @@ capabilities.</t>
 </list></t>
 
 </section>
-<section anchor="the-opportunistic-signaling-mechanism"><name><strong>3. The Opportunistic Signaling Mechanism</strong></name>
+<section anchor="the-opportunistic-signaling-mechanism"><name>3. The Opportunistic Signaling Mechanism</name>
 
 <t>The core of this proposal is for an authoritative nameserver to
 include an SVCB record in the Additional section of its responses
@@ -217,9 +217,9 @@ recursive nameserver receiving the response. The final part is a new
 EDNS(0) option that defines an OPT-OUT capability.</t>
 
 </section>
-<section anchor="authoritative-nameserver-behaviour"><name><strong>4. Authoritative Nameserver Behaviour</strong></name>
+<section anchor="authoritative-nameserver-behaviour"><name>4. Authoritative Nameserver Behaviour</name>
 
-<section anchor="trigger-conditions-for-including-the-ots-hint"><name><strong>4.1. Trigger Conditions for Including the OTS Hint</strong></name>
+<section anchor="trigger-conditions-for-including-the-ots-hint"><name>4.1. Trigger Conditions for Including the OTS Hint</name>
 
 <t>An authoritative nameserver SHOULD include an OTS Hint when <em>all</em> of
 the following conditions are met:</t>
@@ -239,11 +239,13 @@ DoQ) and is configured to advertise these capabilities.</t>
 include an EDNS(0) No-OTS option from the resolver.</t>
   <t><strong>Availability of RRSIG SVCB:</strong> If the zone in which the nameserver
 name is located is signed, only include the SVCB record if it is
-possible to also include the corresponding RRSIG SVCB.</t>
+possible to also include the corresponding RRSIG SVCB. If the zone with
+the nameserver name is unsigned, then include the SVCB even without the
+RRSIG.</t>
 </list></t>
 
 </section>
-<section anchor="multiple-server-identities"><name><strong>4.2. Multiple Server Identities</strong></name>
+<section anchor="multiple-server-identities"><name>4.2. Multiple Server Identities</name>
 
 <t>An authoritative nameserver may be known by multiple FQDNs (e.g.,
 ns1.example.com, dns.customer.org, ns.cdnprovider.net). To facilitate
@@ -254,7 +256,7 @@ server is known. This allows the server to correctly identify itself
 regardless of the specific name used in the NS RRset.</t>
 
 </section>
-<section anchor="format-of-the-ots-hint"><name><strong>4.3. Format of the OTS Hint</strong></name>
+<section anchor="format-of-the-ots-hint"><name>4.3. Format of the OTS Hint</name>
 
 <t>The OTS Hint MUST be an SVCB record with the following
 characteristics:</t>
@@ -277,10 +279,10 @@ triggered its inclusion (e.g., ns.dnsprovider.com.).</t>
  the record.</t>
   <t><strong>SVCB_PARAMS:</strong> A set of Service Parameters indicating the
  supported transport protocols. In this document only the "alpn"
- parameter <xref target="RFC9460"/> is described, as relevant for signaling DoT
+ parameter <xref target="RFC9460"/> is defined, as relevant for signaling DoT
  (alpn=dot), DoH (alpn=doh) and DoQ (alpn=doq).  <vspace blankLines='1'/>
-If any of the "ipv4hint" and "ipv6hint" parameters are present in the
- SVCB parameter list then they SHOULD be ignored.</t>
+If any other parameter, including "ipv4hint" and "ipv6hint", is present in the
+ SVCB parameter list then it SHOULD be ignored.</t>
 </list></t>
 
 <t><strong>Example 1:</strong></t>
@@ -325,16 +327,17 @@ ns2.example.com. IN SVCB 1 . "alpn=doq,dot,do53"
 ~~~
 This requires that "ns2.example.com." is a name that ns.dnsprovider.net. is
 aware of as one of its identities. Furthermore, as the zone example.com is
-unsigned it is not possible to provide a DNSSEC signed OTS Hint.</t>
+unsigned it is not possible to provide a DNSSEC signed OTS Hint in the
+second example.</t>
 
 </section>
 </section>
-<section anchor="recursive-nameserver-behavior"><name><strong>5. Recursive Nameserver Behavior</strong></name>
+<section anchor="recursive-nameserver-behavior"><name>5. Recursive Nameserver Behavior</name>
 
 <t>Recursive nameservers adopting this mechanism SHOULD implement the
 following logic:</t>
 
-<section anchor="when-sending-queries"><name><strong>5.1. When Sending Queries</strong></name>
+<section anchor="when-sending-queries"><name>5.1. When Sending Queries</name>
 
 <t><list style="numbers" type="1">
   <t><strong>OPT-OUT Possibility:</strong> If the resolver already thinks that it
@@ -344,7 +347,7 @@ signaling by including an EDNS(0) "No-OTS" option in the query.</t>
 </list></t>
 
 </section>
-<section anchor="when-receiving-responses"><name><strong>5.2. When Receiving Responses</strong></name>
+<section anchor="when-receiving-responses"><name>5.2. When Receiving Responses</name>
 
 <t><list style="numbers" type="1">
   <t><strong>Opportunistic Parsing:</strong> When receiving an authoritative DNS
@@ -397,22 +400,46 @@ or times out.</t>
 </list></t>
 
 </section>
-<section anchor="validation-of-server-certificate-out-of-scope"><name>**5.3. Validation of Server Certificate: Out of Scope</name>
+<section anchor="authentication-of-the-authoritative-nameserver"><name>5.3. Authentication of the Authoritative Nameserver</name>
+
+<t>Authentication of the authoritative nameserver is not an explicit goal.
+The reason is that as an opportunistic mechanism it will not always be
+possible to do such authentication. Some of the options that do exist
+are listed below.</t>
+
+<t>Authentication of the authoritative nameserver may be done either by
+validation of a DNSSEC RRSIG over the SVCB record containing the OTS
+Hint or by verification of the server certificate presented in the
+set up of the communication (be it over DoT, DoQ or DoH).</t>
+
+<t>As there will not always be a DNSSEC signature to validate that option
+is opportunistic at best. Likewise, while it may sometimes be possible
+to validate the server cert against a DNSSEC-signed TLSA record, it will
+not always be an option.</t>
+
+<t>Finally, validating the server cert against a list of well-known public
+Certificate Authorities is possible, but there is no standardized way
+to determine which CAs are appropriate for DNS server certificates.</t>
+
+<t>However, even without strong authentication of the authoritative server
+the proposed mechanism still provides benefits (privacy, potential
+performance improvements) and for that reason cryptographic verification
+of the server identity is not a requirement.</t>
 
 </section>
-<section anchor="resolver-caching-strategies"><name><strong>5.3. Resolver Caching Strategies</strong></name>
+<section anchor="resolver-caching-strategies"><name>5.4. Resolver Caching Strategies</name>
 
 <t>Resolvers implementing the DNS OTS Hint mechanism have several options
 for caching the transport signals received via OTS Hints.</t>
 
 <t>A suggested primary strategy is to set the EDNS(0) No-OTS option
 when no transport signaling information is needed (because the resolver
-already knows the authoritiative nameservers transport capabilities from
+already knows the authoritative nameservers transport capabilities from
 a previous response or for some other reason).</t>
 
-<t>Three possible caching strategies are listed below. Each strategy has
-different trade-offs in terms of efficiency, responsiveness to changes,
-and resource usage:</t>
+<t>Three example caching strategies are listed below. Other strategies are
+possible. Each strategy has different trade-offs in terms of efficiency,
+responsiveness to changes, and resource usage:</t>
 
 <t><list style="numbers" type="1">
   <t><strong>Standard DNS Cache:</strong> Treat the SVCB record like any other DNS
@@ -424,10 +451,11 @@ connection attempt fails, then invalidate the cached entry. This
 approach uses more aggressive caching based on the assumption that
 changes to transport capabilites are expected to be rare, and there
 is no risk of presenting any data that is no longer correct. The
-possible downside is that with an "alpn=doq" the resolver will not
-learn that, eg. the authoritative server later started to support
-DNS-over-TLS (in addition to DoQ) if it is successfully using the
-DNS-over-QUIC connection.</t>
+possible downside is that the resolver will not learn about possible
+new transports that become available. E.g., with an "alpn=doq", the
+resolver will not learn that the authoritative server later started
+to support DNS-over-TLS (in addition to DoQ) if it is successfully
+using the DNS-over-QUIC connection.</t>
   <t><strong>Success-Based Refresh:</strong> Refresh the transport signal cache entry
 each time a successful connection is made using that
 transport. This provides a balance between efficiency and
@@ -438,7 +466,7 @@ responsiveness but requires additional bookkeeping.</t>
 section 4.</t>
 
 <t>Note that the resolver always has the option of not using the EDNS(0)
-No-OTS whenever the cache entry is getting close to expiry.</t>
+No-OTS option whenever the cache entry is getting close to expiry.</t>
 
 <t>Given the variety of deployment scenarios and operational
 requirements, this document does not mandate a specific caching
@@ -458,7 +486,7 @@ about its use.</t>
 
 </section>
 </section>
-<section anchor="the-edns0-no-ots-option"><name><strong>6. The EDNS(0) No-OTS Option</strong></name>
+<section anchor="the-edns0-no-ots-option"><name>6. The EDNS(0) No-OTS Option</name>
 
 <t>To provide a mechanism for resolvers to explicitly opt out of
 receiving transport signals, this document defines a new EDNS(0)
@@ -515,16 +543,16 @@ mechanism that can be used to disable transport signaling without
 affecting the normal operation of DNS resolution.</t>
 
 </section>
-<section anchor="comparison-with-deleg"><name><strong>7. Comparison with DELEG</strong></name>
+<section anchor="comparison-with-deleg"><name>7. Comparison with DELEG</name>
 
 <t>The idea to use an SVCB alpn parameter for transport signaling
 originated with the work on DELEG <xref target="I-D.draft-ietf-deleg"/>.  The
 current document uses the same data format, but as an opportunistic
-addition to the Additional section rather than as mandatory part of a
+addition to the Additional section rather than as integral part of a
 changed delegation mechanism.</t>
 
 <t>Both mechanisms have distinct use cases, and pros and cons. The major
-advantage of the DELEG mechanism is that is cannot be spoofed or
+advantage of the DELEG mechanism is that it cannot be spoofed or
 filtered, as it is an integral part of an upcoming protocol change.</t>
 
 <t>The opportunistic mechanism described here has the major advantage of
@@ -544,17 +572,17 @@ significant fraction of the DNS traffic with a limited amount of
 effort.</t>
 
 </section>
-<section anchor="security-considerations"><name><strong>8. Security Considerations</strong></name>
+<section anchor="security-considerations"><name>8. Security Considerations</name>
 
 <t><list style="symbols">
-  <t><strong>Spoofing of Unvalidated Hints:</strong> A OTS Hint that cannot be DNSSEC
+  <t><strong>Spoofing of Unvalidated Hints:</strong> An OTS Hint that cannot be DNSSEC
 validated (e.g., for ns.example.com where example.com is unsigned)
 is susceptible to spoofing by an on-path attacker. Such an attacker
 could insert a fake SVCB record advertising a non-existing transport,
 thereby denying connection over that transport. However, since the
 hint is opportunistic and not required for DNS resolution, the
 worst-case scenario is that the resolver attempts a connection that
-fails or falls back to traditional transports.  Security for the
+fails and then falls back to traditional transports.  Security for the
 actual DNS data remains unaffected. The cryptographic validation of
 TLS/QUIC (via X.509 certificates) for DoT/DoQ would still protect the
 integrity and privacy of the connection itself.</t>
@@ -570,10 +598,15 @@ and DoQ for actual session security.</t>
 data in the Additional section that they do not need, the OTS Hint
 will be ignored by everyone except recursive nameservers that
 understand the OTS Hint.</t>
+  <t><strong>No-OTS enables a downgrade attack:</strong> If an attacker is able to
+inject a No-OTS option to an outbound query then no transport signal
+will be provided. However, this is a consequence of the opportunistic
+nature of the OTS Hint and not worse than not being able to do
+transport signaling at all.</t>
 </list></t>
 
 </section>
-<section anchor="operational-considerations"><name><strong>9. Operational Considerations</strong></name>
+<section anchor="operational-considerations"><name>9. Operational Considerations</name>
 
 <t><list style="symbols">
   <t><strong>Response Size:</strong> Including an SVCB record in the Additional
@@ -581,7 +614,7 @@ section will increase the size of UDP responses. Authoritative server
 operators should consider the potential for UDP fragmentation or TCP
 fallback if responses become excessively large, though a single SVCB
 record is typically small. Recursive nameservers should usually set
-the EDNS(0) No-OTS when they already has the transport signaling
+the EDNS(0) No-OTS when they already have the transport signaling
 information.</t>
   <t><strong>Server Configuration:</strong> Authoritative server implementations will
 need configuration options to enable this feature and manage the
@@ -590,10 +623,14 @@ identities list.</t>
 Authoritative servers can begin sending hints without requiring
 changes from resolvers, and resolvers can begin processing hints
 without requiring all authoritative servers to implement the feature.</t>
+  <t><strong>Monitoring:</strong> As there is extremely limited data on effects of
+alternative DNS transports for communication resolver to authoritative
+nameserver it is strongly suggested that monitoring (of use,
+resource consumption, etc) is considered.</t>
 </list></t>
 
 </section>
-<section anchor="iana-considerations"><name><strong>10. IANA Considerations</strong></name>
+<section anchor="iana-considerations"><name>10. IANA Considerations</name>
 
 <section anchor="no-ots-edns0-option"><name>10.1. No-OTS EDNS(0) Option</name>
 
@@ -613,7 +650,7 @@ occurrences of "(This document)" with a proper reference.</t>
 
 </section>
 </section>
-<section anchor="implementation-status"><name><strong>11. Implementation Status</strong></name>
+<section anchor="implementation-status"><name>11. Implementation Status</name>
 
 <t><strong>Note to the RFC Editor</strong>: Please remove this entire section before publication.</t>
 
@@ -622,7 +659,7 @@ Swedish Internet Foundation implements this draft (see <eref target="https://git
 recursive nameserver parts of the draft.</t>
 
 </section>
-<section anchor="acknowledgments"><name><strong>12. Acknowledgments</strong></name>
+<section anchor="acknowledgments"><name>12. Acknowledgments</name>
 
 <t><list style="symbols">
   <t>The participants of the DELEG Working Group, Peter Thomassen and Christian Elmerot.</t>
@@ -813,7 +850,7 @@ recursive nameserver parts of the draft.</t>
 </references>
 
 
-<?line 574?>
+<?line 613?>
 
 <section anchor="change-history-to-be-removed-before-publication"><name>Change History (to be removed before publication)</name>
 
@@ -827,196 +864,209 @@ recursive nameserver parts of the draft.</t>
   </back>
 
 <!-- ##markdown-source:
-H4sIAAAAAAAAA81c63LjxpX+30/RK/+IqJCc0Vxsj6r2opE0HqVmJFni2JtK
-UikQaJKIQIBBg5LpePJY+wL7Ynu+c7obDRKUnYpTta7SmASBRve5fufSPRqN
-VJM3hTnRB6frZlHVeZM0+YPR51d3elInpV1VdaPv8nmZFHk5P1DJdFqbB7p/
-7x1ZlZbJkobM6mTWjP5SLZIyH2WlrVajxj8wsv6B0fPnKksauv9v56eTi88q
-pS/zqt6caNtkSuWr+kQ39do2L54/f/P8hUpqk5zoy7IxdWka9VjV9/O6Wq9O
-MOnrG/09XaBx9Te4qO7Nhu7I2gdG55iWUrZJyuzPSVGV9OqNsWqVn+g/NFU6
-1JYmWJuZpU+bJT78SamEyXOi9EhpnZf2RP9urO8aU9I4S7okS/4dFhtfruo5
-rf5HImpVnujJwui7R5PldhHmo99V6zLjG+j+lL40WDtuM7hilklenGgm49i6
-kf8rd0/bJp81prCGfjPR5D6M9Tu6gZZofgyz+2CqsnP5V5tdQSOPZ37kn53d
-xVi/NfXcNvX//k9LvIs6v+9e/9XmZ2jo8VSGrvZRT5VVvWTxPyGxK2fRt9Fo
-pJMpPZykJDqTRW41ifl6acpGr+pqVVljdaKXJoWw26Wmh3Wyo1HW1A+mtrqp
-VLWCGqzp5iZPk6LYaNEI3SxMXmu75t9lnAKzlVGCAil6LQlrVVh9aMbz8ZBf
-UNHwevLhTh+eV5NBdO39ZHLDV98PNPEo/KC+/XR5huvfDgY6y2uTNjSVx7xZ
-5CWmok+zLAd1aWaWfqRPupp1l6YwWG1oWiWRYayZPAc0QDOaJtZkBzpZ0WyT
-dKGTfInVa1Mm08LgoarwFCG+pjxXzG+9mtdJFq2XeFuWMgGrl1VttJnN8jQn
-DhSbIaZam+lG5Ut60wPUf1XnD0lKP9G01zRV+oSBV6ZmxpapYeLa9dSav65p
-GMVSkcgrxuCyiRgKjhuwyGRYQFk1NPu/roliNOxGe25o3D83Y33Z0CPKJjMz
-1NMkvX9M6myUVssVkYyWLpOhJWBJxFfzYEr9uKB/iJh3F2f6gYyjk2uiNzgB
-gmIaeDUJnMUwpCE8rdpk4/1yWWohi+HrlTC2I4D6cLpu9JTscTZQjaFLREHw
-uU/0LBFtPqebiBQkJbfvzt68fvlGT5kKD3mGZxPVko5+eFzk4L6TErmjox2i
-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
+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
+aKSzKT2czUh0JsvCahLzzcpUrV439bq2xupMr8wMwm5Xmh7W2Z5GWdM8mMbq
+tlb1GmqwoZvbYpaV5VaLRuh2aYpG2w3/LuOUoFZGCQqk6LUkrHVp9bEZL8ZD
+fkFNw+vJxzt9/K6eDJJr7yeTG776fqBpjcIP6rvvP1zg+neDgc6LxsxaIuWx
+aJdFBVL0eZ4X4C5RZulH+qTreXdqCoM1hsiqiA1jzew5ogHa0TSzJj/S2Zqo
+zWZLnRUrzF6bKpuWBg/VpecIreuMaQV9m/WiyfJkvrS2VSUEWL2qG6PNfF7M
+ClqBcjsEqY2ZblWxojc9QP3XTfGQzegnIntDpNInDLw2DS9sNTPMXLuZWvPn
+DQ2jWCoyecUYq2ySBcWKGyyRyTGBqm6J+j9viGM07Fb71dC4f2HG+kNLjyib
+zc1QT7PZ/WPW5KNZvVoTy2jqQgxNAVOidTUPptKPS/oXMfPu8kI/kHF0ck38
+xkqAoSADryaBsxiGNITJakw+PiyXlRa2GL5ey8J2BFAfTzetnpI9zgeqNXSJ
+OIh17hM9S0xbLOgmYgVJye03F29ev3yjp8yFhyLHs5mKrKMfHpcFVt9JidzR
+0Q7RDL3Kgh48LrNWHXh/0XoF4YW61m8v9e3lp+tfX747010u0Oepwftoccps
+WjcZyCYeEOXfkphvpjprz9Tvlm27tmfPni342phW6pl4rh+e/W1+7A/H//AQ
+g7EIXW0hXDOQ/+icGZTE6R4Wz09vSMtIMlNYuzHkrkwL77WsN2VOS1fSzFX2
+QAaQlY1VZKzZjArzyXQswI/5huwP2YXZzKxJbugbyzatMNgL27cq8rwkC/mF
+Ph3D9jZ1vmFFETV5V5OZrfQVmXF9tyXBWJFJubobQAlXWVOQSWlMWZAs0hS+
+f3fDwj+5uIEGKuLTisRwxsJOJLePhqYUTQPu7RMWsjT6N8uCyKKZWaOjQSSE
+oB9NWY5oBjR18hcmdyYC8pBpwguP4CprPN1EH1RJKthkC1xe1TlJXWJ74tBl
+cW96LK36y1/+hfTgq69ff/358wGzK7e8efXl6efPHRusYYMV22B/04vXz+km
+NpRLNlU/b81opS5/KERzya6wntAATpvAsoLGiVZUBw9XVzTsBvppwSR19+uL
+tzy6UC/WfUYgysY5gLx0QsNkqecknFbRG/xLvWXfRntqYexgO/WshA3X5od1
+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
+f3T2miKXZQAA
 
 -->
 
