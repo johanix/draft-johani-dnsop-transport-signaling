@@ -148,8 +148,14 @@ capitals.
 # 3. Modes of Operation
 
 [new text, needs to be integrated]
-
-This document provides two modes, opportunistic mode and strict mode.
+<!--
+Note: Tweaks by johani here.
+-->
+This document provides two modes of DNS transport signaling: opportunistic
+mode and strict mode. Both modes are based on the authoritative nameserver
+providing a transport signal via an SVCB record in a DNS reponse. Which mode
+is used is determined by whether the SVCB record is DNSSEC-signed and the
+resolver has been able to successfully validate the SVCB record.
 
 In opportunistic mode, the autoritative server and the recursive resolver
 make a best effort attempt to set up an encrypted DNS transport connection.
@@ -157,31 +163,32 @@ This provides enhanced privacy against a passive attacker. However an
 active attracker may be able to force a downgrade to unencrypted DNS.
 
 In strict mode, the authoritative server and the recursive resolver try to
-ensure an active attack results in at most a denial of surface, but does not
+ensure an active attack results in at most a denial of service, but does not
 leak any data or allow untrusted data to accepted.
 
-# 3. Problem space
+## 3.1. Description of Problem Space
 
 [new text, needs to be integrated]
 
 This section looks at the various configurations that need to be supported.
 
-In opportunistic mode, the authoritative needs to provide the recursive 
+In opportunistic mode, the authoritative server needs to provide the recursive
 resolver with the transport signaling record even when the recursive resolver
 does not explicitly ask for it. For example by adding it to the result of an
-A or AAAA query for a name server. The recursive resolver accepts such an
-additional record
+A or AAAA query for a nameserver. The recursive resolver accepts such an
+additional record.
+
 This section looks at the various configurations that need to be supported.
 
-In opportunistic mode, the authoritative needs to provide the recursive 
+In opportunistic mode, the authoritative server needs to provide the recursive 
 resolver with the transport signaling record even when the recursive resolver
 does not explicitly ask for it. For example by adding it to the result of an
 A or AAAA query for a name server. The recursive resolver accepts such a
 record an uses it to set up a secure transport.
 
 For strict mode, it is important to realize that security can only increase:
-if one name server support script mode then that may be enough to access a
-zone in a secure way even if other name server only offer unencrypted 
+if one name server support strict mode then that may be enough to access a
+zone in a secure way even if aother name server only offer unencrypted 
 transports or support only opportunistic mode. 
 For this reason, the following analysis assumes that a zone is served by
 exactly one name server.
@@ -193,10 +200,9 @@ Note that the name server addresses may be located in the child zone.
 And some of the three zones may be served by the same name server.
 
 The parent zone contains delegation NS records which are not DNSSEC signed.
-So it does not matter if the parent zone is DNSSEC signed or not.
+Therefore it does not matter if the parent zone is DNSSEC signed or not.
 What does matter is whether the parent zone support a strict mode secure
-connection.
-This gives a total of two possibilities for the parent zone.
+connection. This gives a total of two possibilities for the parent zone.
 
 For the child zone there are also two possibilities, the child zone is DNSSEC
 secure or not.
@@ -208,70 +214,98 @@ is DNSSEC secure, and the zone is neither DNSSEC secure nor does it support a
 strict mode secure connection.
 
 [ the following may need a table, only text for now ]
+[johani: I suggest two tables: one for a parent w/ secure conn and one for parent
+ w/o. I realised that we need a 3D table and had to give up on the ASCII art below]
+~~~
+ +---+------------------------------+
+ |   |         Parent               |
+ |   +------------+-----------------+
+ |   |   Strict   |   !Strict       |
+ +---+------------+-----------------+
+ +---+------------+-----------------+
+ +---+------------+-----------------+
+ +---+------------+-----------------+
+~~~
 
-There are two special cases where strict transport signalling is unavailable.
-The first is when the zone that holds the name server records is neither
+### 3.1.1. Strict Transport Signaling Not Possible
+
+There are two special cases where strict transport signaling is unavailable.
+The first is when the zone that holds the nameserver records is neither
 avaiable using strict mode secure connection nor DNSSEC secure. In that
-case obtaining transport signalling in a secure way is not possible.
+case obtaining transport signaling in a secure way is not possible.
 
-The second case is where the parent zone is no using strict mode
-transport signalling and the child zone is not DNSSEC secure. 
+The second case is where the parent zone is not using strict mode
+transport signaling and the child zone is not DNSSEC secure. 
 In that case obtain a list of the child's name servers in a secure way is 
 impossible.
 
-The remaining cases can be analysed as followes.
+### 3.1.2. Strict Transport Signaling Possible
+
+The remaining cases can be analysed as follows.
+
 If the parent supports a strict mode secure transport then the resolver
-can receive a trust (delegation) NS RR set from the parent. 
+can receive a trust (delegation) NS RRset from the parent. 
 Otherwise, the resolver has to obtain the apex NS RRset at client (using
 an untrusted or potentially optimistic secure connection) and verify that
 the apex NS RRset is DNSSEC secure.
 
 If the zone that hold the name server records is available using 
 a strict mode secure connection then it is sufficient if the name server add
-transport mode signalling with an A or AAAA query.
+transport mode signaling with an A or AAAA query.
 
 If no strict mode secure connection is available then the authoritative
-server should include transport signalling records with an A or AAAA query
+server should include transport signaling records with an A or AAAA query
 including signatures.
 However, if the resolver does not receive those records it has to generate
-an expliciy query for the transport signnaling record to obtain a secure
-denial of existance.
+an expliciy query for the transport signaling record to obtain a secure
+denial of existence.
 
-# 3. Modes of Operation
+### 3.1.3. Summary Of Transport Signaling Possibilities
 
+Yada, yada.
+
+## 3.2. Behaviour of the Two Modes
+
+<!---
 This document defines two modes for consuming and acting on transport signaling: 
 Opportunistic and Strict. These modes define when and how data from an SVCB record
 associated with an authoritative nameserver may be used by a resolver.
+--->
 
-## 3.1. Opportunistic Mode
+### 3.2.1. Opportunistic Mode
 
-Opportunistic mode applies when the SVCB record for the authoritative nameserver is
-received opportunistically in the Additional section (an OTS Hint). The hint may or
-may not be DNSSEC-signed and may or may not be successfully validated by the resolver.
+Opportunistic mode applies when the OTS Hint (the SVCB record) for the authoritative
+nameserver is received opportunistically in the Additional section as part of the
+response to a DNS query for something else. The hint may or may not be DNSSEC-signed and
+may or may not be successfully validated by the resolver.
 
-Behavior:
+#### Behavior:
+
 - If the opportunistic SVCB and its signatures are DNSSEC-validated, the resolver MAY
   treat it equivalently to Strict mode for the corresponding data.
 - If the opportunistic SVCB is not validated (e.g., unsigned, or validation fails), then:
-  - The resolver MAY use only positive "alpn" entries to attempt an upgrade (e.g., dot, doq).
+  - The resolver MAY use only positive "alpn" entries to attempt an upgrade (e.g., dot,
+    doq).
   - The resolver MUST ignore any negative transport signals (e.g., "-do53").
   - The resolver MUST ignore ipv4hint, ipv6hint, tlsa, and any other parameters that
     affect addressing or authentication.
   - The resolver MUST be prepared to immediately fall back to traditional UDP/TCP (Do53)
     upon failure or timeout.
 
-Rationale:
+#### Rationale:
+
 - Opportunistic mode enables low-latency discovery without requiring changes at
   parent zones or prior configuration, while containing risk by limiting use of
   unvalidated data to only positive upgrade attempts.
 
-## 3.2. Strict Mode
+### 3.2.2. Strict Mode
 
 Strict mode applies when the resolver explicitly queries for the SVCB RRset at the
 authoritative nameserver’s owner name (the nameserver FQDN) and obtains a DNSSEC-signed
 response that is successfully validated to the appropriate trust anchor.
 
-Requirements and behavior:
+#### Requirements and behavior:
+
 - The resolver MUST issue a direct query for the SVCB RRset at the nameserver’s FQDN.
 - The resolver MUST successfully DNSSEC-validate the SVCB RRset and its RRSIGs.
 - When validated, the resolver MAY use all fields of the SVCB RDATA for connection
@@ -281,29 +315,32 @@ Requirements and behavior:
   - ipv4hint / ipv6hint: address hints for the authoritative nameserver.
   - tlsa: a new SVCB parameter defined by this document that conveys the TLSA record
     to authenticate TLS/QUIC connections to the authoritative nameserver.
-- If a validated SVCB contains an explicit negative transport signal (e.g., "-do53"),
-  the resolver SHOULD honor it. For example, "-do53" indicates that legacy UDP/TCP is
-  not supported by this authoritative nameserver and the resolver SHOULD attempt only
-  the positively advertised alternatives. If all alternatives fail and the negative signal
-  is validated, the resolver SHOULD treat that server as unreachable and prefer other 
+- If a validated SVCB contains the explicit negative transport signal "-do53",
+  the resolver SHOULD honor it. The "-do53" signal indicates that legacy UDP/TCP is
+  NOT supported by this authoritative nameserver and the resolver SHOULD attempt only
+  the positively advertised alternatives. If all transport alternatives fail in the
+  validated case the resolver SHOULD treat that server as unreachable and prefer other
   authoritative servers for the zone.
 
-Notes:
-- This document introduces an extension to the SVCB "alpn" parameter: a leading "-"
-  indicates an explicit negative transport signal (e.g., "-do53"). IANA and specification
+#### Notes:
+
+- This document introduces a new possible value to the SVCB "alpn" parameter: "-do53",
+  which explicitly indicates absence of support for legacy UDP/TCP transport. IANA
   updates are required (see IANA Considerations).
 - This document also introduces a new SVCB parameter "tlsa" that carries TLSA RDATA for
-  the nameserver endpoint. The exact encoding is defined in IANA Considerations. Use of
-  "tlsa" is only appropriate when the SVCB is DNSSEC-validated.
+  the nameserver endpoint. The exact encoding is defined in IANA Considerations. A "tlsa"
+  parameter MUST only be used by a resolver when the SVCB record has been successfully
+  DNSSEC-validated.
 
 ## 3.3. Precedence and Interaction
 
-- When both Relaxed and Strict information are available, Strict mode information MUST
-  take precedence.
-- An Opportunistic-mode SVCB that is DNSSEC-validated is equivalent to Strict for policy
-  and usage purposes.
-- In the absence of validated information, an Opportunistic signal MUST NOT be used to
-  enforce negative policy, alter addressing, or bootstrap authentication material.
+- Opportunistic (validated) and Strict (validated) transport signals MUST take precedence
+  over opportunistic (unvalidated) transport signals.
+- An Opportunistic (validated) transport signal is equivalent to a Strict (validated)
+  transport signal for policy and usage purposes.
+- An Opportunistic (unvalidated) transport signal MUST NOT be used to enforce negative
+  policy ("-do53"), alter addressing ("ipv4hint/ipv6hint"), or bootstrap authentication
+  material ("tlsa")
 
 ## 3.4. Caching and No-OTS
 
@@ -316,26 +353,26 @@ Notes:
 ## 3.5. Summary of Permitted Use by Mode
 
 - Opportunistic (unvalidated):
-  - MAY use: alpn (positive) only.
-  - MUST NOT use: alpn (negative), ipv4hint, ipv6hint, tlsa, or any parameter that
+  - MAY use: alpn: "doq", "dot", "h2" and "h3" only.
+  - MUST NOT use: alpn: "-do53", ipv4hint, ipv6hint, tlsa, or any parameter that
     affects addressing or authentication.
-  - MUST support fallback to Do53.
+  - MUST support fallback to do53 (i.e. UDP/TCP).
 - Strict (validated):
-  - MAY use: alpn (positive), alpn (negative with "-" prefix), ipv4hint, ipv6hint,
+  - MAY use: alpn: "doq", "dot", "h2", "h3", "-do53", ipv4hint, ipv6hint,
     tlsa, and other defined parameters.
 - Opportunistic (validated):
   - Equivalent to Strict for the validated SVCB.
 
 Implementation note:
-- Existing SVCB clients that do not understand negative alpn tokens or the new "tlsa"
+- Existing resolvers that do not understand the alpn="-do53" token or the new "tlsa"
   parameter will ignore them and remain interoperable. Clients implementing this
   specification MUST follow the above mode-dependent processing and precedence rules.
 
 # 4. The Opportunistic Signaling Mechanism
 
 The core of this proposal is for an authoritative nameserver to
-include an SVCB record in the Additional section of its responses
-under specific conditions.
+include a DNS transport signal in the form of an SVCB record in the
+Additional section of its responses under specific conditions.
 
 This consists of three parts. The first two are the behaviour of the
 authoritative nameserver receiving the query and the behaviour of the
@@ -356,14 +393,17 @@ the following conditions are met:
 
 2. **Transport Capability:** The responding authoritative nameserver
    supports one or more alternative transport protocols (e.g., DoT,
-   DoH, DoQ) and is configured to advertise these capabilities.
+   DoH, DoQ) and is configured to advertise these capabilities. Or the
+   nameserver does not (temporarily or permanently) support DNS over
+   legacy UDP/TCP transport and is configured to advertise this fact.
 
+<!--
 3. **Presence of the OTS Option:** The query does include an EDNS(0)
    OTS option from the resolver.
 
 4. **Availability of RRSIG SVCB:** The zone in which the nameserver
    name is located is signed, including the SVCB record.
-
+-->
 5. **SVCB not present in Answer:** If the SVCB record is present in
    the Answer section (because it was explicitly queried for), then it
    does not have to be included again in the Additional section,
@@ -375,14 +415,13 @@ An authoritative nameserver may be known by multiple FQDNs (e.g.,
 ns1.example.com, dns.customer.org, ns.cdnprovider.net). To facilitate
 condition 1 ("Self-Identification"), authoritative server
 implementations MAY include a configuration mechanism (e.g., an
-identities list) where operators can list all FQDNs by which the
+identities list) where operators can list FQDNs by which the
 server is known. This allows the server to correctly identify itself
 regardless of the specific name used in the NS RRset.
 
 ## 5.3. Format of the DNS Transport Signal SVCB Record
 
-The OTS Hint MUST be an SVCB record with the following
-characteristics:
+The OTS Hint MUST be an SVCB record with the following characteristics:
 
 * **OWNER:** The owner name of the SVCB record MUST be the label "_dns" followed by
   the FQDN of the authoritative nameserver itself, as identified in the NS RRset that
@@ -408,15 +447,16 @@ characteristics:
 * **SVCB_PARAMS:** A set of Service Parameters indicating the
    supported transport protocols. This document defines the "alpn"
    parameter {{!RFC9460}}, as relevant for signaling DoT
-   (alpn=dot), DoH (alpn=doh), DoQ (alpn=doq) and Do53 (alpn=do53).
+   (alpn=dot), DoH (alpn=doh), DoQ (alpn=doq). It further defines the new
+   alpn parameter token "-do53" for signaling lack of support for UDP/TCP.
 
    This document further defines the SVCB parameters "ipv4hint" and "ipv6hint"
    as allowed to be included in the SVCB record. These keys MUST NOT
    be used by the resolver unless the SVCB record has been successfully
    validated.
    
-   Finally a "tlsa" parameter containing the corresponding TLSA record 
-   for the certificate used to secure a DoQ or DoT transport. This 
+   Finally a new "tlsa" SVCB parameter containing the corresponding TLSA record
+   for the certificate used to secure a DoQ or DoT transport is defined. This
    parameter MUST NOT be used by the resolver unless the SVCB record
    has been successfully validated.
 
@@ -565,7 +605,7 @@ the transport signal is close to expiration from the resolver cache. An
 upgraded transport signal allows the resolver to operate in Strict Mode,
 and then use all the information in the SVCB record.
 
-## 6.3. Authentication of the Authoritative Nameserver
+## 6.4. Authentication of the Authoritative Nameserver
 
 Authentication of the authoritative nameserver is not an explicit goal.
 The reason is that as an opportunistic mechanism it will not always be
@@ -591,7 +631,7 @@ the proposed mechanism still provides benefits (privacy, potential
 performance improvements) and for that reason cryptographic verification
 of the server identity is not a requirement.
 
-## 6.4. Resolver Caching Strategies
+## 6.5. Resolver Caching Strategies
 
 Resolvers implementing the DNS OTS Hint mechanism have several options
 for caching the transport signals received via OTS Hints. 
@@ -774,7 +814,7 @@ resource consumption, etc) is considered.
 ## 11.1. No-OTS EDNS(0) Option
 
 This document defines a new EDNS(0) option, entitled "No-OTS",
-assigned a value of TBD in the "DNS EDNS0 Option Codes (OPT)" registry.
+assigned a value of TBD in the "DNS EDNS0 Option Codes" registry.
 
 ~~~
    +-------+--------------------------+----------+----------------------+
@@ -843,24 +883,27 @@ The downside is that it is not possible to strictly rely on anything
 specific being present in the Additional section, as it may be stripped off by
 a middle man or even by the sending nameserver (eg. due to packet size
 constraints). For this reason it is not possible to provide more than an
-opportunistic transport signal.
+opportunistic transport signal, which may or may not be possible to validate
+(if it has a DNSSEC signature).
 
+[johani: this needs to be updated]
 Another issue is whether the data provided may be trusted or not. A
 spoofed positive signal (eg. claiming DoQ support when this is false)
-would not be catastrophic. However, a spoofed negative signal
+would not be catastrophic. However, a spoofed negative alpn="-do53" signal
 (eg. claiming no Do53 support while such support is present) would be
 dangerous. For this reason (ability to provide both positive and
 negative signals) the OTS hint MUST be secure and hence DNSSEC signed.
 
-// This is
-// usually a major issue and the primary reason that data in the Additional
-// section is actively ignored by resolvers. In this particular case, though,
-// even an untrusted transport signal is better than no signal at all. Furthermore,
-// the only effect of a forged or otherwise incorrect transport signal is a,
-// typically failed, connection attempt to an authoritative nameserver that
-// does not support the advertised transport. This will cause immediate fallback
-// to "Do53", i.e. traditional DNS over UDP/TCP and the non-availability of the
-// advertised transport will be remembered by the resolver (for some suitable time).
+<!--
+This is usually a major issue and the primary reason that data in the Additional
+section is actively ignored by resolvers. In this particular case, though,
+even an untrusted transport signal is better than no signal at all. Furthermore,
+the only effect of a forged or otherwise incorrect transport signal is a,
+typically failed, connection attempt to an authoritative nameserver that
+does not support the advertised transport. This will cause immediate fallback
+to "Do53", i.e. traditional DNS over UDP/TCP and the non-availability of the
+advertised transport will be remembered by the resolver (for some suitable time).
+-->
 
 Hence, using the Additional section for opportunistic transport signaling has
 vastly more benefits than drawbacks.
@@ -873,12 +916,10 @@ transport by prefixing an existing ALPN token with a hyphen ("-"). For example,
 "-do53" indicates that legacy UDP/TCP transport is not supported.
 
 Processing rules:
-- Negative tokens are only actionable when the SVCB RRset is DNSSEC-validated
-  (i.e., Strict mode, or Relaxed mode with successful validation). In these
-  cases, resolvers SHOULD honor negative tokens when selecting transports.
-- In unvalidated Relaxed mode, resolvers MUST ignore negative tokens.
-- Negative tokens do not define new ALPN identifiers; they reuse existing
-  identifiers in presentation form with a leading hyphen.
+- The "-do53" negative token is only actionable when the SVCB RRset is
+  DNSSEC-validated (i.e., Strict mode, or Opportunistic mode with successful DNSSEC validation). In these cases, resolvers SHOULD honor the "-do53" token when
+  selecting transports.
+- In Opportunistic (unvalidated) mode, resolvers MUST ignore the "-do53" negative token.
 
 Examples:
 - alpn="dot,doq"           -> Indicates support for DoT and DoQ.
@@ -886,9 +927,9 @@ Examples:
 - alpn="-do53,doq,dot"     -> Indicates no Do53; prefer DoQ/DoT (validated modes only).
 
 Interoperability considerations:
-- Implementations that do not understand negative tokens will ignore them
-  per SVCB parameter processing and remain interoperable.
-- This extension does not alter on-the-wire encoding for ALPN; it is a
+- Implementations that do not understand the alpn "-do53" negative token will ignore
+  it per SVCB parameter processing and remain interoperable.
+- This alpn token does not alter on-the-wire encoding for ALPN; it is a
   presentation-layer convention. IANA considerations for documentation
   of this convention are provided in Section 11.3.
 
