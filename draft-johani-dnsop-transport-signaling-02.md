@@ -147,9 +147,24 @@ capitals.
 
 # 3. Modes of Operation
 
-This document defines two modes for consuming and acting on transport signaling: Strict and Relaxed. These modes define when and how data from an SVCB record associated with an authoritative nameserver may be used by a resolver.
+This document defines two modes for consuming and acting on transport signaling: Opportunistic and Strict. These modes define when and how data from an SVCB record associated with an authoritative nameserver may be used by a resolver.
 
-## 3.1. Strict Mode
+## 3.1. Opportunistic Mode
+
+Opportunistic mode applies when the SVCB record for the authoritative nameserver is received opportunistically in the Additional section (an OTS Hint). The hint may or may not be DNSSEC-signed and may or may not be successfully validated by the resolver.
+
+Behavior:
+- If the opportunistic SVCB and its signatures are DNSSEC-validated, the resolver MAY treat it equivalently to Strict mode for the corresponding data.
+- If the opportunistic SVCB is not validated (e.g., unsigned, or validation fails), then:
+  - The resolver MAY use only positive "alpn" entries to attempt an upgrade (e.g., dot, doq).
+  - The resolver MUST ignore any negative transport signals (e.g., "-do53").
+  - The resolver MUST ignore ipv4hint, ipv6hint, tlsa, and any other parameters that affect addressing or authentication.
+  - The resolver MUST be prepared to immediately fall back to traditional UDP/TCP (Do53) upon failure or timeout.
+
+Rationale:
+- Opportunistic mode enables low-latency discovery without requiring changes at parent zones or prior configuration, while containing risk by limiting use of unvalidated data to only positive upgrade attempts.
+
+## 3.2. Strict Mode
 
 Strict mode applies when the resolver explicitly queries for the SVCB RRset at the authoritative nameserver’s owner name (the nameserver FQDN) and obtains a DNSSEC-signed response that is successfully validated to the appropriate trust anchor.
 
@@ -166,42 +181,27 @@ Notes:
 - This document introduces an extension to the SVCB "alpn" parameter: a leading "-" indicates an explicit negative transport signal (e.g., "-do53"). IANA and specification updates are required (see IANA Considerations).
 - This document also introduces a new SVCB parameter "tlsa" that carries TLSA RDATA for the nameserver endpoint. The exact encoding is defined in IANA Considerations. Use of "tlsa" is only appropriate when the SVCB is DNSSEC-validated.
 
-## 3.2. Relaxed Mode
-
-Relaxed mode applies when the SVCB record for the authoritative nameserver is received opportunistically in the Additional section (an OTS Hint). The hint may or may not be DNSSEC-signed and may or may not be successfully validated by the resolver.
-
-Behavior:
-- If the opportunistic SVCB and its signatures are DNSSEC-validated, the resolver MAY treat it equivalently to Strict mode for the corresponding data.
-- If the opportunistic SVCB is not validated (e.g., unsigned, or validation fails), then:
-  - The resolver MAY use only positive "alpn" entries to attempt an upgrade (e.g., dot, doq).
-  - The resolver MUST ignore any negative transport signals (e.g., "-do53").
-  - The resolver MUST ignore ipv4hint, ipv6hint, tlsa, and any other parameters that affect addressing or authentication.
-  - The resolver MUST be prepared to immediately fall back to traditional UDP/TCP (Do53) upon failure or timeout.
-
-Rationale:
-- Relaxed mode enables low-latency discovery without requiring changes at parent zones or prior configuration, while containing risk by limiting use of unvalidated data to only positive upgrade attempts.
-
 ## 3.3. Precedence and Interaction
 
-- When both Strict and Relaxed information are available, Strict mode information MUST take precedence.
-- A Relaxed-mode SVCB that is DNSSEC-validated is equivalent to Strict for policy and usage purposes.
-- In the absence of validated information, Relaxed mode is purely opportunistic and MUST NOT be used to enforce negative policy, alter addressing, or bootstrap authentication material.
+- When both Relaxed and Strict information are available, Strict mode information MUST take precedence.
+- An Opportunistic-mode SVCB that is DNSSEC-validated is equivalent to Strict for policy and usage purposes.
+- In the absence of validated information, an Opportunistic signal MUST NOT be used to enforce negative policy, alter addressing, or bootstrap authentication material.
 
 ## 3.4. Caching and No-OTS
 
 - Resolvers MAY cache Strict-mode SVCB information according to its TTL and MAY use the EDNS(0) No-OTS option to avoid redundant hints when sufficient information is cached.
-- In Relaxed mode, resolvers MAY cache positive "alpn" results subject to local policy (see Resolver Caching Strategies). When a resolver has sufficient cached information, it SHOULD set No-OTS to reduce response size and limit unnecessary hints.
+- In Opportunistic mode, resolvers MAY cache positive "alpn" results subject to local policy (see Resolver Caching Strategies). When a resolver has sufficient cached information, it SHOULD set No-OTS to reduce response size and limit unnecessary hints.
 
 ## 3.5. Summary of Permitted Use by Mode
 
-- Strict (validated):
-  - MAY use: alpn (positive), alpn (negative with "-" prefix), ipv4hint, ipv6hint, tlsa, and other defined parameters.
-- Relaxed (validated):
-  - Equivalent to Strict for the validated SVCB.
-- Relaxed (unvalidated):
+- Opportunistic (unvalidated):
   - MAY use: alpn (positive) only.
   - MUST NOT use: alpn (negative), ipv4hint, ipv6hint, tlsa, or any parameter that affects addressing or authentication.
   - MUST support fallback to Do53.
+- Strict (validated):
+  - MAY use: alpn (positive), alpn (negative with "-" prefix), ipv4hint, ipv6hint, tlsa, and other defined parameters.
+- Opportunistic (validated):
+  - Equivalent to Strict for the validated SVCB.
 
 Implementation note:
 - Existing SVCB clients that do not understand negative alpn tokens or the new "tlsa" parameter will ignore them and remain interoperable. Clients implementing this specification MUST follow the above mode-dependent processing and precedence rules.
@@ -254,14 +254,14 @@ identities list) where operators can list all FQDNs by which the
 server is known. This allows the server to correctly identify itself
 regardless of the specific name used in the NS RRset.
 
-## 5.3. Format of the OTS Hint
+## 5.3. Format of the DNS Transport Signal SVCB Record
 
 The OTS Hint MUST be an SVCB record with the following
 characteristics:
 
-* **OWNER:** The owner name of the SVCB record MUST be the FQDN of the
- authoritative nameserver itself, as identified in the NS RRset that
- triggered its inclusion (e.g., ns.dnsprovider.com.).
+* **OWNER:** The owner name of the SVCB record MUST be the label "_dns" followed by
+  the FQDN of the authoritative nameserver itself, as identified in the NS RRset that
+ triggered its inclusion (e.g., _dns.ns.dnsprovider.com.).
 
 * **CLASS:** IN (Internet).
 
@@ -281,17 +281,19 @@ characteristics:
    the record.
 
 * **SVCB_PARAMS:** A set of Service Parameters indicating the
-   supported transport protocols. In this document only the "alpn"
-   parameter {{!RFC9460}} is defined, as relevant for signaling DoT
+   supported transport protocols. This document defines the "alpn"
+   parameter {{!RFC9460}}, as relevant for signaling DoT
    (alpn=dot), DoH (alpn=doh), DoQ (alpn=doq) and Do53 (alpn=do53).
 
-   The defined SVCB keys "ipv4hint" and "ipv6hint" may be included in
-   the SVCB record and if so SHOULD be used by the resolver as the
-   entire SVCB is DNSSEC-signed and therefore trustworthy.
+   This document further defines the SVCB parameters "ipv4hint" and "ipv6hint"
+   as allowed to be included in the SVCB record. These keys MUST NOT
+   be used by the resolver unless the SVCB record has been successfully
+   validated.
    
-   A further improvement would be to include a "tlsa" key containing
-   the TLSA record for the certificate used to secure a DoQ or DoT
-   transport. However, such an SVCB key is not yet defined.
+   Finally a "tlsa" parameter containing the corresponding TLSA record 
+   for the certificate used to secure a DoQ or DoT transport. This 
+   parameter MUST NOT be used by the resolver unless the SVCB record
+   has been successfully validated.
 
    If any other parameter is present in the SVCB parameter list it
    must be ignored by the resolver.
@@ -315,9 +317,10 @@ example.com.       IN NS ns.dnsprovider.net.
 Additional:
 ns.dnsprovider.net. IN A 5.6.7.8
 ns.dnsprovider.net. IN RRSIG A ...
-ns.dnsprovider.net. IN SVCB 1 . "alpn=doq,dot,do53"
-ns.dnsprovider.net. IN RRSIG SVCB ...
+_dns.ns.dnsprovider.net. IN SVCB 1 . "alpn=doq,dot,do53"
+_dns.ns.dnsprovider.net. IN RRSIG SVCB ...
 ~~~
+### johani: broken example, to be fixed
 **Example 2:**
 
 If the signed zone example.com has two nameservers, ns1.example.com and
@@ -347,6 +350,25 @@ DNSSEC-signed has the consequence that the OTS transport signal cannot
 be present for an unsigned zone using vanity names in the zone for its
 nameservers.
 
+**Example 3:
+The resolver explicitly asks for the DNS transport signal for the
+authoritative nameserver ns.dnsprovider.net. by querying
+for "_dns.ns.dnsprovider.net. SVCB":
+~~~
+Header: ...
+
+Answer:
+_dns.ns.dnsprovider.net.  IN SVCB 1 . (alpn="doq,dot,-do53", tlsa="...")
+_dns.ns.dnsprovider.net.  IN RRSIG SVCB ...
+
+Additional:
+~~~
+Because the resolver uses strict mode (by querying for the SVCB record and
+validating the response) all data in the record may be used. In this case that
+includes the negative transport for "do53" which will effectively turn off
+UDP/TCP use by the resolver for communicating with this particular authoritative
+nameserver.
+
 # 6. Recursive Nameserver Behavior
 
 Recursive nameservers adopting this mechanism SHOULD implement the
@@ -359,6 +381,12 @@ following logic:
    it is about to send a query to it may opt out from DNS transport
    signaling by including an EDNS(0) "No-OTS" option in the query.
 
+   It is important to be aware that using the No-OTS option consistently
+   will make the resolver blind to any changes in the transport
+   signals, which is clearly not acceptable. Hence any use of "No-OTS"
+   should be restricted to only be used within the TTL of an already
+   received and parsed OTS Hint.
+
 ## 6.2. When Receiving Responses
 
 1. **Opportunistic Parsing:** When receiving an authoritative DNS
@@ -366,29 +394,29 @@ following logic:
    records.
 
 2. **Owner Check:** If an SVCB record is found whose owner name
-   matches an authoritative nameserver identified in the Authority or
-   Answer sections of the *current* response, the resolver MAY consider
-   this an OTS Hint.
+   matches the "_dns" label followed by an authoritative nameserver
+   name for the zone to which the query belongs, the resolver MAY
+   consider this an OTS Hint.
 
-3. **DNSSEC Validation (Optional but Recommended):**
-* The resolver SHOULD attempt to DNSSEC validate the OTS Hint. This
-involves validating the SVCB record itself and its corresponding RRSIG
-(if present) against the DNSSEC chain of trust for the zone that owns
-the SVCB record (e.g., dnsprovider.com for ns.dnsprovider.com).
+3. **DNSSEC Validation (Optional but Recommended):** 
+   * The resolver SHOULD attempt to DNSSEC validate the OTS Hint. This
+   involves validating the SVCB record itself and its corresponding RRSIG
+   (if present) against the DNSSEC chain of trust for the zone that owns
+   the SVCB record (e.g., dnsprovider.com for _dns.ns.dnsprovider.com).
 
-* If validation succeeds: The OTS Hint is considered a **trusted
-signal**. The resolver MAY then prefer the signaled alternative
-transports for subsequent queries to that specific authoritative
-nameserver.
+   * If validation succeeds: The OTS Hint is considered a **trusted
+   signal**. The resolver MAY then use all the transport signals provided in
+   the SVCB record when deciding on alternative transport choices for
+   subsequent queries to that specific authoritative nameserver.
 
-* If validation fails, or no RRSIG is present: The OTS Hint MUST
-be treated as an **unvalidated hint**. The resolver MAY still
-opportunistically attempt to use the signaled alternative transports,
-but MUST be prepared for immediate fallback to traditional transports
-(UDP/TCP) if the connection fails. This is particularly relevant for
-scenarios like vanity names (e.g., ns.customer.com where customer.com
-is an unsigned zone, but the underlying server ns.dnsprovider.com is
-capable).
+   * If validation fails, or no RRSIG is present: The OTS Hint MUST
+   be treated as an **unvalidated hint**. The resolver MAY still
+   opportunistically attempt to use the signaled alternative transports,
+   but MUST be prepared for immediate fallback to traditional transports
+   (UDP/TCP) if the connection fails. This is particularly relevant for
+   scenarios like vanity names (e.g., ns.customer.com where customer.com
+   is an unsigned zone, but the underlying server ns.dnsprovider.com is
+   capable).
 
 4. **Prioritization:**
 * Any DNSSEC-validated SVCB record found via explicit query (e.g.,
@@ -403,6 +431,14 @@ configuration.
 traditional UDP/TCP transport if an attempt to use an alternative
 transport based on an OTS Hint (especially an unvalidated one) fails
 or times out.
+
+## 6.3. Upgrading the DNS Transport Signal
+
+If an unvalidated opportunistic transport signal has been received the
+resolver may chose to upgrade that signal, either immediately or when
+the transport signal is close to expiration from the resolver cache. An
+upgraded transport signal allows the resolver to operate in Strict Mode,
+and then use all the information in the SVCB record.
 
 ## 6.3. Authentication of the Authoritative Nameserver
 
@@ -436,34 +472,15 @@ Resolvers implementing the DNS OTS Hint mechanism have several options
 for caching the transport signals received via OTS Hints. 
 
 A suggested primary strategy is to set the EDNS(0) No-OTS option
-when no transport signaling information is needed (because the resolver
-already knows the authoritative nameserver's transport capabilities from
-a previous response or for some other reason).
+when no transport signaling information is needed. This may be because
+the resolver already knows the authoritative nameserver's transport
+capabilities from a previous response (with a TTL that has not expired)
+or for some other reason.
 
-Three example caching strategies are listed below. Other strategies are
-possible. Each strategy has different trade-offs in terms of efficiency,
-responsiveness to changes, and resource usage:
-
-1. **Standard DNS Cache:** Treat the SVCB record like any other DNS
-   record, caching it according to its TTL. This is the simplest
-   approach and will simply cause the resolver to fall back to UDP for
-   one query if the transport signal data has expired.
-
-2. **Cache-Until-Fail:** Cache the transport signal until a
-   connection attempt fails, then invalidate the cached entry. This
-   approach uses more aggressive caching based on the assumption that
-   changes to transport capabilities are expected to be rare, and there
-   is no risk of presenting any data that is no longer correct. The
-   possible downside is that the resolver will not learn about possible
-   new transports that become available. E.g., with an "alpn=doq", the
-   resolver will not learn that the authoritative server later started
-   to support DNS-over-TLS (in addition to DoQ) if it is successfully
-   using the DNS-over-QUIC connection.
-
-3. **Success-Based Refresh:** Refresh the transport signal cache entry
-   each time a successful connection is made using that
-   transport. This provides a balance between efficiency and
-   responsiveness but requires additional bookkeeping.
+The primary caching strategy SHOULD be "Standard DNS Cache", i.e.
+treat the SVCB record like any other DNS record, caching it according to
+its TTL. This is the simplest approach and will simply cause the resolver
+to fall back to UDP for one query if the transport signal data has expired.
 
 For a more detailed analysis of possible caching logic, see {{!RFC9539}},
 section 4.
@@ -527,8 +544,9 @@ conditions described in Section 5.1.
 This option provides a clean way for resolvers to opt out of receiving
 transport signals, which may be useful in scenarios where:
 
-* The resolver has already established transport preferences for a
-  particular authoritative server
+* The resolver has recently established transport preferences for a
+  particular authoritative server and that transport signal has not
+  expired.
 * The resolver does not support or does not want to use alternative
   transports
 * The resolver wants to minimize response sizes
