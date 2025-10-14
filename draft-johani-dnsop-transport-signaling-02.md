@@ -177,6 +177,97 @@ capabilities.
 
 * **SVCB Record:** Service Binding record, as defined in {{!RFC9460}}.
 
+# 3. Modes
+
+[new text, needs to be integrated]
+
+This document provides two modes, opportunistic mode and strict mode.
+
+In opportunistic mode, the autoritative server and the recursive resolver
+make a best effort attempt to set up an encrypted DNS transport connection.
+This provides enhanced privacy against a passive attacker. However an
+active attracker may be able to force a downgrade to unencrypted DNS.
+
+In strict mode, the authoritative server and the recursive resolver try to
+ensure an active attack results in at most a denial of surface, but does not
+leak any data or allow untrusted data to accepted.
+
+# 3. Problem space
+
+[new text, needs to be integrated]
+
+This section looks at the various configurations that need to be supported.
+
+In opportunistic mode, the authoritative needs to provide the recursive 
+resolver with the transport signaling record even when the recursive resolver
+does not explicitly ask for it. For example by adding it to the result of an
+A or AAAA query for a name server. The recursive resolver accepts such an
+additional record
+This section looks at the various configurations that need to be supported.
+
+In opportunistic mode, the authoritative needs to provide the recursive 
+resolver with the transport signaling record even when the recursive resolver
+does not explicitly ask for it. For example by adding it to the result of an
+A or AAAA query for a name server. The recursive resolver accepts such a
+record an uses it to set up a secure transport.
+
+For strict mode, it is important to realize that security can only increase:
+if one name server support script mode then that may be enough to access a
+zone in a secure way even if other name server only offer unencrypted 
+transports or support only opportunistic mode. 
+For this reason, the following analysis assumes that a zone is served by
+exactly one name server.
+
+There are three zones that matter in this analysis: the parent zone, the
+child zone, and the zone that contains the name server addresses and transport
+signalling records.
+Note that the name server addresses may be located in the child zone. 
+And some of the three zones may be served by the same name server.
+
+The parent zone contains delegation NS records which are not DNSSEC signed.
+So it does not matter if the parent zone is DNSSEC signed or not.
+What does matter is whether the parent zone support a strict mode secure
+connection.
+This gives a total of two possibilities for the parent zone.
+
+For the child zone there are also two possibilities, the child zone is DNSSEC
+secure or not.
+
+Then for the name server transport signalling there are three possibilities:
+the zone that hold the name server information supports a strict mode secure
+connection, the zone does not support a strict mode secure connection but it is DNSSEC secure, and the zone is neither DNSSEC secure nor does it support a
+strict mode secure connection.
+
+[ the following may need a table, only text for now ]
+
+There are two special cases where strict transport signalling is unavailable.
+The first is when the zone that holds the name server records is neither
+avaiable using strict mode secure connection nor DNSSEC secure. In that
+case obtaining transport signalling in a secure way is not possible.
+
+The second case is where the parent zone is no using strict mode
+transport signalling and the child zone is not DNSSEC secure. 
+In that case obtain a list of the child's name servers in a secure way is 
+impossible.
+
+The remaining cases can be analysed as followes.
+If the parent supports a strict mode secure transport then the resolver
+can receive a trust (delegation) NS RR set from the parent. 
+Otherwise, the resolver has to obtain the apex NS RRset at client (using
+an untrusted or potentially optimistic secure connection) and verify that
+the apex NS RRset is DNSSEC secure.
+
+If the zone that hold the name server records is available using 
+a strict mode secure connection then it is sufficient if the name server add
+transport mode signalling with an A or AAAA query.
+
+If no strict mode secure connection is available then the authoritative
+server should include transport signalling records with an A or AAAA query
+including signatures.
+However, if the resolver does not receive those records it has to generate
+an expliciy query for the transport signnaling record to obtain a secure
+denial of existance.
+
 # 3. The Opportunistic Signaling Mechanism
 
 The core of this proposal is for an authoritative nameserver to
