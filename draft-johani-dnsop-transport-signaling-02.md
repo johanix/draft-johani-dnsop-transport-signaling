@@ -223,7 +223,7 @@ record and uses it to set up a secure transport.
 
 For strict mode, it is important to realize that security can only increase:
 if one name server supports strict mode then that may be enough to access a
-zone in a secure way even if another name server only offer unencrypted 
+zone in a secure way even if another nameserver only offers unencrypted
 transports or support only opportunistic mode. 
 For this reason, the following analysis assumes that a zone is served by
 exactly one name server:
@@ -232,7 +232,7 @@ child.parent.  IN NS  ns.provider.com.
 
 There are three zones that matter in this analysis: the parent zone, the
 child zone, and the zone that contains the name server addresses and transport
-signalling records.
+signaling records.
 Note that the name server addresses may be located in the child zone. 
 And some of the three zones may be served by the same name server.
 
@@ -246,7 +246,7 @@ For the child zone there are also two possibilities, the child zone is DNSSEC
 secure or not.
 
 Then for the name server transport signaling there are three possibilities:
-the zone that hold the name server information supports a strict mode secure
+the zone that hold the name server information supports a strict-mode secure
 connection, the zone does not support a strict mode secure connection but it
 is DNSSEC secure, and the zone is neither DNSSEC secure nor does it support a
 strict mode secure connection.
@@ -269,7 +269,7 @@ strict mode secure connection.
 
 There are two special cases where strict transport signaling is unavailable.
 The first is when the zone that holds the nameserver records is neither
-available using strict mode secure connection nor DNSSEC secure. In that
+available using a strict-mode secure connection nor DNSSEC secure. In that
 case obtaining transport signaling in a secure way is not possible.
 
 The second case is where the parent zone is not using strict mode
@@ -287,15 +287,14 @@ Otherwise, the resolver has to obtain the apex NS RRset at client (using
 an untrusted or potentially optimistic secure connection) and verify that
 the apex NS RRset is DNSSEC secure.
 
-If the zone that hold the name server records is available using 
-a strict mode secure connection then it is sufficient if the name server add
-transport mode signaling with an A or AAAA query.
+If the zone that holds the nameserver records is available using 
+a strict-mode secure connection then it is sufficient if the nameserver adds
+transport signaling along with an A or AAAA response.
 
-If no strict mode secure connection is available then the authoritative
-server should include transport signaling records with an A or AAAA query
-including signatures.
-However, if the resolver does not receive those records it has to generate
-an explicit query for the transport signaling record to obtain a secure
+If no strict-mode secure connection is available then the authoritative
+server SHOULD include transport signaling records with an A or AAAA response,
+including signatures. If the resolver does not receive those records, it MUST
+issue an explicit query for the transport signaling record to obtain a secure
 denial of existence.
 
 ### 3.1.3. Summary Of Transport Signaling Possibilities
@@ -324,7 +323,7 @@ may or may not be successfully validated by the resolver.
 - If the opportunistic SVCB is not validated (e.g., unsigned, or validation fails), then:
   - The resolver MAY use only positive "alpn" entries to attempt an upgrade (e.g., dot,
     doq).
-  - The resolver MUST ignore any negative transport signals (e.g., "-do53").
+  - The resolver MUST ignore the negative transport signal "-do53", if present.
   - The resolver MUST ignore ipv4hint, ipv6hint, tlsa, and any other parameters that
     affect addressing or authentication.
   - The resolver MUST be prepared to immediately fall back to traditional UDP/TCP (Do53)
@@ -339,12 +338,12 @@ may or may not be successfully validated by the resolver.
 ### 3.2.2. Validated Mode
 
 Validated mode applies when the resolver explicitly queries for the SVCB RRset at the
-authoritative nameserver’s owner name (the nameserver FQDN) and obtains a DNSSEC-signed
+SVCB owner name for the nameserver (i.e., _dns.<nameserver FQDN>) and obtains a DNSSEC-signed
 response that is successfully validated to the appropriate trust anchor.
 
 #### Requirements and behavior:
 
-- The resolver MUST issue a direct query for the SVCB RRset at the nameserver’s FQDN.
+- The resolver MUST issue a direct query for the SVCB RRset at _dns.<nameserver FQDN>.
 - The resolver MUST successfully DNSSEC-validate the SVCB RRset and its RRSIGs.
 - When validated, the resolver MAY use all fields of the SVCB RDATA for connection
   establishment and policy decisions, including:
@@ -738,7 +737,7 @@ is easier for the resolver but places more strict requirements on
 the authoritative servers that serve a zone. The second one is the other
 way around.
 
-# 7.1 First option.
+## 7.1. First option.
 
 In this option, there is a requirement that for a zone to support
 strict mode, all nameservers for the zone have to support strict mode.
@@ -750,7 +749,7 @@ that supports opportunistic mode and assume strict mode and the next time
 find a different nameserver and switch back to an unencrypted transport.
 
 [ for SMDT, we should consider putting the SVCB in the authority section. 
-That guarantees that it ends up add the resolver (doesn't accidentally get
+That guarantees that it ends up at the resolver (doesn't accidentally get
 truncated) and gets validated ]
 
 If the resolver has a strict mode secure connection to the parent of
@@ -804,7 +803,7 @@ To handle inconsistencies, if a resolver finds a strict mode nameserver for
 a zone and later finds a nameserver that does not support strict mode, then
 the resolver MUST set the status of the zone to not support strict mode.
 
-# 7.2 Second option.
+## 7.2. Second option.
 
 For this option, the resolver does all the work. No SMDT flag is needed.
 
@@ -854,7 +853,7 @@ in a secure zone if the DNSSEC validation status is bogus, or if there was an
 error determining the DNSSEC status of OTS hint, then the resolver MUST
 consider the child zone unreachable.
 
-# 7. The EDNS(0) No-OTS Option
+# 8. The EDNS(0) No-OTS Option
 
 To provide a mechanism for resolvers to explicitly opt out of
 receiving transport signals, this document defines a new EDNS(0)
@@ -909,7 +908,7 @@ The No-OTS option is designed to be a simple, lightweight
 mechanism that can be used to disable transport signaling without
 affecting the normal operation of DNS resolution.
 
-# 8. Comparison with DELEG
+# 9. Comparison with DELEG
 
 The idea to use an SVCB alpn parameter for transport signaling
 originated with the work on DELEG {{?I-D.draft-ietf-deleg}}.  The
@@ -937,7 +936,7 @@ here has the potential of enabling upgrading the transport for a
 significant fraction of the DNS traffic with a limited amount of
 effort.
 
-# 9. Security Considerations
+# 10. Security Considerations
 
 * **Spoofing of Unvalidated Hints:** An OTS Hint that cannot be DNSSEC
 validated (e.g., for ns.example.com where example.com is unsigned)
@@ -972,7 +971,7 @@ will be provided. However, this is a consequence of the opportunistic
 nature of the OTS Hint and not worse than not being able to do
 transport signaling at all.
 
-# 10. Operational Considerations
+# 11. Operational Considerations
 
 * **Response Size:** Including an SVCB record in the Additional
 section will increase the size of UDP responses. Authoritative server
@@ -996,9 +995,9 @@ alternative DNS transports for communication resolver to authoritative
 nameserver it is strongly suggested that monitoring (of use,
 resource consumption, etc) is considered.
 
-# 11. IANA Considerations
+# 12. IANA Considerations
 
-## 11.1. No-OTS EDNS(0) Option
+## 12.1. No-OTS EDNS(0) Option
 
 This document defines a new EDNS(0) option, entitled "No-OTS",
 assigned a value of TBD in the "DNS EDNS0 Option Codes" registry.
@@ -1014,7 +1013,7 @@ assigned a value of TBD in the "DNS EDNS0 Option Codes" registry.
 **Note to the RFC Editor**: In this section, please replace
 occurrences of "(This document)" with a proper reference.
 
-## 11.2. SVCB/HTTPS Parameter: tlsa
+## 12.2. SVCB/HTTPS Parameter: tlsa
 
 This document requests registration of a new SVCB/HTTPS parameter in the
 "SVCB and HTTPS Parameters" registry:
@@ -1032,21 +1031,30 @@ associated with the nameserver endpoint. Exact encoding and size limits
 are defined by this document (TBD). Use of this parameter is appropriate
 only when the containing SVCB RRset is DNSSEC-validated (see Section 3).
 
-## 11.3. SVCB alpn Negative Tokens
+## 12.3. The New SVCB alpn Token "-do53"
 
-This document updates the "alpn" SVCB parameter syntax to permit negative
-transport tokens by prefixing with a hyphen ("-") (e.g., "-do53"). The
-semantics of a negative token are to indicate explicit non-support of the
-named transport by the authoritative nameserver.
+This document updates the "alpn" SVCB parameter with one additional token,
+"-do53", used to signal lack of support for UDP/TCP, i.e. a negative
+transport capability. Note that at present support for UDP/TCP is required
+for authoritative nameservers.
 
-IANA is requested to note this extension in the "SVCB and HTTPS Parameters"
-registry entry for "alpn" and reference this document. No new ALPN IDs are
-registered by this change; negative tokens reuse existing ALPN identifiers
-with a leading hyphen as a presentation-only convention.
+The "-do53" token has two use cases. The first is for temporary service
+interruptions (i.e. a busy nameserver that only supports UDP/TCP transport
+may signal alpn="-do53" prior to being offline for maintenance). The second
+is for a future where a significant fraction of authoritative DNS traffic
+has migrated to encrypted transports and it may be reasonable to not
+support every transport at every nameserver.
 
-# 12. Acknowledgements
+IANA is requested to add the "-do53" token to the list of defined tokens for
+the "SVCB and HTTPS Parameters" registry entry for "alpn" and reference this
+document. A new ALPN ID must be allocated for "-do53".
 
-* The participants of the DELEG Working Group, Peter Thomassen and Christian Elmerot.
+# 13. Acknowledgements
+
+* Many people have commented and contributed to this document in different ways.
+  In no particular order and with a significant risk of forgetting someone:
+  The participants of the DELEG Working Group, Peter Thomassen, Christian Elmerot,
+  John Todd, Peter Koch, Willem Toorop, Peter van Dijk.
 
 # Appendix A. Rationale for Using the Additional Section
 
