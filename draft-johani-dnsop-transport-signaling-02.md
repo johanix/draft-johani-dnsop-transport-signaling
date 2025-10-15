@@ -731,6 +731,129 @@ The chosen strategy SHOULD be documented in the implementation's
 configuration options to allow operators to make informed decisions
 about its use.
 
+# 7. Strict Recursive Nameserver Behavior
+
+This section contains two options for resolver behavior. The first one
+is easier for the resolver but places more strict requirements on
+the authoritative servers that serve a zone. The second one is the other
+way around.
+
+# 7.1 First option.
+
+In this option, there is a requirement that for a zone to support
+strict mode, all nameservers for the zone have to support strict mode.
+In addition the OTS hint for nameservers that support strict mode has
+to include a Strict Mode DNS Transport (SMDT) parameter to signal that
+this nameserver support strict mode.
+Without an additional flag, a resolver may something find a nameserver
+that supports opportunistic mode and assume strict mode and the next time
+find a different nameserver and switch back to an unencrypted transport.
+
+[ for SMDT, we should consider putting the SVCB in the authority section. 
+That guarantees that it ends up add the resolver (doesn't accidentally get
+truncated) and gets validated ]
+
+If the resolver has a strict mode secure connection to the parent of
+the zone that the resolver tries to access then it can (for the
+purpose of setting up a strict mode secure connection) trust the delegation
+NS records it receives from the parent.
+
+Otherwise the resolver MUST lookup the NS RRset at the apex of the child
+zone and MUST DNSSEC validate the reply. If the DNSSEC validation status
+is insecure or indeterminate then a strict mode secure connection is not
+possible and the resolver can access the child zone using unencrypted DNS
+or using opportunistic mode.
+
+If the DNSSEC validation status is bogus then the resolver MUST treat the zone
+as unreachable. Otherwise, if the DNSSEC validation status is secure, then
+the resolver proceeeds with the next step.
+
+To support strict mode, all nameservers have to support strict mode. 
+So a resolver can just pick a random nameserver as a starting point.
+- if the nameserver is in a zone with a strict mode secure connection then
+  it trusts the result of a A or AAAA query for the nameserver. If
+  the reply includes an OTS hint with the SMDT flag then a strict mode
+  secure connection can be established and this step terminates.
+  If an OTS hint is received without the SMDT flag then the resolver may
+  switch to opportunistic mode.
+  Otherwise, strict mode is not available and the resolver fall backs to 
+  unencrypted DNS.
+- if the nameserver is in a DNSSEC secure zone then the resolver needs proof
+  that either the OTS hint exists or that it doesn't exist. If the OTS hint
+  exists and has the SMDT flag then a strict mode secure connection can be
+  established and this step terminates.
+  Note that nameservers that support strict mode include the OTS hint plus
+  signatures in a reply to an A or AAAA query.
+  The resolver does have to send a separate query to get a negative result.
+  If an OTS hint is received without the SMDT flag then the resolver may
+  switch to opportunistic mode.
+  Otherwise, strict mode is not available and the resolver falls back to 
+  unencrypted DNS.
+  If there is a failure to prove either presence or absence of the OTS hints
+  then the resolver MAY either consider the zone unreachable or try another
+  nameserver. The resolver MUST NOT use this nameserver to query the child
+  zone.
+- if the nameserver is in a DNSSEC insecure zone, then no strict mode 
+  secure connection is possible to this nameserver.
+  If there is a failure to determine whether the zone is insecure then
+  the resolver MUST NOT use this nameserver to query the child zone.
+  The resolver MAY either consider the zone unreachable or try another
+  nameserver.
+
+To handle inconsistencies, if a resolver finds a strict mode nameserver for
+a zone and later finds a nameserver that does not support strict mode, then
+the resolver MUST set the status of the zone to not support strict mode.
+
+# 7.2 Second option.
+
+For this option, the resolver does all the work. No SMDT flag is needed.
+
+If the resolver has a strict mode secure connection to the parent of
+the zone that the resolver tries to access then it can (for the
+purpose of setting up a strict mode secure connection) trust the delegation
+NS records it receives from the parent.
+
+Otherwise the resolver MUST lookup the NS RRset at the apex of the child
+zone and MUST DNSSEC validate the reply. If the DNSSEC validation status
+is insecure or indeterminate then a strict mode secure connection is not
+possible and the resolver can access the child zone using unencrypted DNS
+or using opportunistic mode.
+
+If the DNSSEC validation status is bogus then the resolver MUST treat the zone
+as unreachable. Otherwise, if the DNSSEC validation status is secure, then
+the resolver proceeeds with the next step.
+
+In the next step, the resolver has to find at least one nameserver that
+offers a strict mode secure connection or it has to prove that none of the
+nameservers offer a strict mode secure connection.
+
+The resolver iterates over the list of nameservers for the child zone and
+for each nameserver:
+- if the nameserver is in a zone with a strict mode secure connection then
+  the resolver trusts the result of a A or AAAA query for the nameserver. If
+  the reply includes an OTS hint then a strict mode secure connection 
+  can be established and this step terminates.
+  The resolver MAY check the
+  remaining nameservers to see if they offer strict mode as well.
+- if the nameserver is in a DNSSEC secure zone then the resolver needs proof
+  that either the OTS hint exists or that it doesn't exist. If the OTS hint
+  exists then a strict mode secure connection can be established and this
+  step terminates.
+  The resolver MAY check the
+  remaining nameservers to see if they offer strict mode as well.
+  If there is a failure to prove either presence or absence of the OTS hints
+  the the resolver MUST note this (to be used at the end of this algorithm).
+- if the nameserver is in a DNSSEC insecure zone, then no strict mode 
+  secure connection is possible to this nameserver.
+  The resolver continues with the next nameserver.
+
+The final step is to determine whether the resolver can accept that a
+strict mode connection was not available. If there was any failure, with
+looking up a nameserver in a zone that has strict mode secure connection,
+in a secure zone if the DNSSEC validation status is bogus, or if there was an
+error determining the DNSSEC status of OTS hint, then the resolver MUST
+consider the child zone unreachable.
+
 # 7. The EDNS(0) No-OTS Option
 
 To provide a mechanism for resolvers to explicitly opt out of
