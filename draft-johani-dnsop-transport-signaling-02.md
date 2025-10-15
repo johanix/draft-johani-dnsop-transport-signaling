@@ -32,6 +32,12 @@ author:
   organization: The Swedish Internet Foundation
   country: Sweden
   email: erik.bergstrom@internetstiftelsen.se
+ -
+  ins: P. Homberg
+  name: Philip Homberg
+  organization: NLNet Labs
+  country: The Netherlands
+  email: philip@nlnetlabs.nl
 
 normative:
   RFC2119:
@@ -49,15 +55,22 @@ informative:
 
 This document proposes a mechanism for authoritative DNS servers to
 signal their support for alternative transport protocols (e.g., DNS
-over TLS (DoT), DNS over HTTPS (DoH) and DNS over QUIC (DoQ)) directly
-within the Additional section of authoritative DNS responses. This
-"hint-based" approach aims to enable resolvers to discover and upgrade
-transport connections more efficiently, thereby improving privacy,
-security, and performance for subsequent interactions.
+over TLS (DoT), DNS over HTTPS (DoH) and DNS over QUIC (DoQ)). This
+signaling may either be provided within the Additional section of
+authoritative DNS responses or be the result of direct DNS queries.
 
+The former, "opportunistic mode" is hint-based and aims to enable resolvers
+to discover and upgrade transport connections more efficiently, thereby
+improving privacy, security, and performance for subsequent interactions.
 The mechanism is designed to not require any protocol change. It is
 safe, backward-compatible, and effective even when DNSSEC validation
 of the hint is not possible or desired.
+
+It is also possible to establish a "strict mode" where the communication
+between the resolver and the authoritative server is provably
+both secure and authentic. Strict mode may not always be possible,
+depending on a number of factors, but when it is possible it does
+provide a stronger and more trustworthy connection.
 
 This document proposes an improvement to the opportunistic (but blind)
 testing of alternative transports suggested in RFC9539 by providing a
@@ -151,11 +164,33 @@ capitals.
 <!--
 Note: Tweaks by johani here.
 -->
-This document provides two modes of DNS transport signaling: opportunistic
-mode and strict mode. Both modes are based on the authoritative nameserver
-providing a transport signal via an SVCB record in a DNS reponse. Which mode
-is used is determined by whether the SVCB record is DNSSEC-signed and the
-resolver has been able to successfully validate the SVCB record.
+This document describes a mechanism of DNS transport signaling intended to
+result in improved communication between the resolver and the authoritative
+nameserver. This DNS transport signal is provided via an SVCB record that
+describes the transport capabilities of the authoritative server.
+
+In the easiest case the resolver will be able to communicate securely with
+the authoritative server using an encrypted channel (like DoQ or DoT), but
+the resolver does not have the identity of the authoritative server proven.
+This is referred to as "opportunistic mode" and is essentially equivalent to
+the communication used today over UDP/TCP with the addition of privacy.
+
+The second level of communication is when the resolver is able to verify
+the identity of the authoritative server via validation of a DNSSEC
+signature over the DNS transport signal (which is contained in an SVCB
+record). This is referred to as "validated mode" and is equivalent to the
+opportunistic mode plus knowledge that the DNS transport signal provably
+describes the authoritative server that the resolver is communicating with.
+
+The third level of communication is when the resolver is able to verify
+both the identity of the authoritative server AND that this server is
+an authoritative server for the zone that the DNS query is about (the
+"child zone"). This is referred to as "strict mode". The difference
+between strict mode and validated mode is that in the latter case the NS
+RRset for the zone is either DNSSEC validated (and shown to contain the
+authoritative nameserver) or the NS RRset for the child zone has been
+received via a referral from a parent nameserver using a strict mode
+connection.
 
 In opportunistic mode, the autoritative server and the recursive resolver
 make a best effort attempt to set up an encrypted DNS transport connection.
@@ -188,10 +223,12 @@ record an uses it to set up a secure transport.
 
 For strict mode, it is important to realize that security can only increase:
 if one name server support strict mode then that may be enough to access a
-zone in a secure way even if aother name server only offer unencrypted 
+zone in a secure way even if another name server only offer unencrypted 
 transports or support only opportunistic mode. 
 For this reason, the following analysis assumes that a zone is served by
-exactly one name server.
+exactly one name server:
+
+child.parent.  IN NS  ns.provider.com.
 
 There are three zones that matter in this analysis: the parent zone, the
 child zone, and the zone that contains the name server addresses and transport
@@ -199,15 +236,16 @@ signalling records.
 Note that the name server addresses may be located in the child zone. 
 And some of the three zones may be served by the same name server.
 
-The parent zone contains delegation NS records which are not DNSSEC signed.
-Therefore it does not matter if the parent zone is DNSSEC signed or not.
-What does matter is whether the parent zone support a strict mode secure
-connection. This gives a total of two possibilities for the parent zone.
+The parent zone contains the delegation NS RRset for the child which is not
+DNSSEC signed. Therefore it does not matter if the parent zone is DNSSEC signed
+or not. What does matter is whether any parent authoritative nameserver supports
+a strict mode secure connection. This gives a total of two possibilities for the
+parent zone.
 
 For the child zone there are also two possibilities, the child zone is DNSSEC
 secure or not.
 
-Then for the name server transport signalling there are three possibilities:
+Then for the name server transport signaling there are three possibilities:
 the zone that hold the name server information supports a strict mode secure
 connection, the zone does not support a strict mode secure connection but it
 is DNSSEC secure, and the zone is neither DNSSEC secure nor does it support a
@@ -529,8 +567,8 @@ _dns.ns.dnsprovider.net.  IN RRSIG SVCB ...
 Additional:
 ~~~
 Because the resolver uses strict mode (by querying for the SVCB record and
-validating the response) all data in the record may be used. In this case that
-includes the negative transport for "do53" which will effectively turn off
+validating the response) all data in the received SVCB record SHOULD be used.
+In this case that includes the negative signal "-do53", which will effectively turn off
 UDP/TCP use by the resolver for communicating with this particular authoritative
 nameserver.
 
