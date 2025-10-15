@@ -696,6 +696,10 @@ So a resolver can just pick a random nameserver as a starting point.
   The resolver MAY either consider the zone unreachable or try another
   nameserver.
 
+To handle inconsistencies, if a resolver finds a strict mode nameserver for
+a zone and later finds a nameserver that does not support strict mode, then
+the resolver MUST set the status of the zone to not support strict mode.
+
 # 7.2 Second option.
 
 For this option, the resolver does all the work. No SMDT flag is needed.
