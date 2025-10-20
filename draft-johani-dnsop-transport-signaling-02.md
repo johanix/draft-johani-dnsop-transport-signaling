@@ -132,8 +132,8 @@ these records, often from a parent zone. While robust, this approach
 can introduce additional latency and requires explicit configuration
 at the parent zone level.
 
-This document proposes a new hint-based "DNS Opportunistic Transport
-Signaling" (DTS) mechanism. DTS, aka an "DTS Hint" allows an
+This document proposes a new hint-based "DNS Transport Signaling" (DTS)
+mechanism. DTS, aka an "DTS Hint" allows an
 authoritative DNS nameserver to directly convey its transport
 capabilities as a hint within the Additional section of responses to
 queries where it identifies itself as an authoritative nameserver for
@@ -204,8 +204,8 @@ requirement is:
   authoritative server intends to offer authenticated encryption.
 
 This document aims to provide exactly such a mechanism while staying
-within the current DNS protocol. Therefore the transport signaling
-provided will be opportunistic, and as such fit well as an improvement
+within the current DNS protocol. Therefore the DNS transport signaling
+provided will be hint-based, and as such fit well as an improvement
 to {{!RFC9539}}.
 
 ## 1.3. Rationale for Using the Additional Section
@@ -227,10 +227,7 @@ capitals.
  user queries, performing iterative lookups to authoritative servers to
  resolve domain names.
 
-* **OTS Hint:** A DNSSEC-signed SVCB record included opportunistically
- in the Additional section of an authoritative DNS response, intended
- to signal the responding authoritative nameserver's transport
- capabilities.
+* **DTS Hint:** An SVCB record included in the Additional section of an authoritative DNS response, intended to signal the responding authoritative nameserver's transport capabilities.
 
 * **SVCB Record:** Service Binding record, as defined in {{!RFC9460}}.
 
@@ -280,19 +277,11 @@ downgrade to unencrypted DNS.
 This section looks at the various configurations that need to be
 supported.
 
-In opportunistic mode, the authoritative server needs to provide the
-recursive resolver with the transport signaling record even when the
-recursive resolver does not explicitly ask for it. For example by
-adding it to the result of an A or AAAA query for a nameserver. The
-recursive resolver accepts such an additional record.
-
-This section looks at the various configurations that need to be
-supported.
-
-In opportunistic mode, the authoritative server needs to provide the
-recursive resolver with the transport signaling record even when the
-recursive resolver does not explicitly ask for it. For example by
-adding it to the result of an A or AAAA query for a name server. The
+For opportunistic mode to be possible, the authoritative server needs
+to provide the recursive resolver with the DNS transport signaling
+record even when the recursive resolver does not explicitly ask for it
+(i.e. as a hint, in the Additional Section). For example by adding it
+to the result of an A or AAAA query for a name server. The
 recursive resolver accepts such a record and uses it to set up a
 secure transport.
 
@@ -652,7 +641,7 @@ following logic:
    that owns the SVCB record (e.g., dnsprovider.com for
    _dns.ns.dnsprovider.com).
 
-   * If validation succeeds: The OTS Hint is considered a **trusted
+   * If validation succeeds: The DTS Hint is considered a **trusted
    signal**. The resolver MAY then use all the transport signals
    provided in the SVCB record when deciding on alternative transport
    choices for subsequent queries to that specific authoritative
