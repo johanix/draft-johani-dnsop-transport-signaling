@@ -60,11 +60,18 @@ signaling may either be provided within the Additional section of
 authoritative DNS responses or be the result of direct DNS queries.
 
 The former, "opportunistic mode" is hint-based and aims to enable
-resolvers to discover and upgrade transport connections efficiently,
-thereby improving privacy, security, and performance for subsequent
+resolvers to discover alternative transports efficiently and then
+opportunistically upgrade connections to the authoritative, thereby
+improving privacy, security, and performance for subsequent
 interactions.  The mechanism is designed to not require any protocol
-changes. It is safe, backward-compatible, and effective even when
-DNSSEC validation of the hint is not possible or desired.
+change or additional queries. It is safe, backward-compatible, and
+effective even when DNSSEC validation of the hint is not possible or
+desired.
+
+In certain circumstances and with additional overhead it is also
+possible to use direct queries to securely obtain authentication
+information for the authoritative that can then be used to
+authenticate an encrypted connection.
 
 It is also possible to establish a "validated mode" where the
 communication between the resolver and the authoritative server is
@@ -94,6 +101,30 @@ leveraging modern transport protocols like DNS over TLS (DoT)
 {{!RFC7858}}, DNS over HTTPS (DoH) {{!RFC9461}} and DNS over QUIC
 (DoQ) {{!RFC9250}} to enhance privacy, security, and performance.
 
+Clients of authoritative servers (recursive resolvers) may employ
+various policies (usage profiles) when attempting to connect to an
+authoritative. Two policies are described for the stub to recursive
+case in RFC8310, Strict and Opportunistic which are also applicable
+here:
+
+ * Strict mode relies on the client having securely discovered
+   authentication information (e.g. a name or SPKI) for the server and
+   then choosing to hard fail if an authenticated encrypted connection
+   cannot be established. This protects against active attack on the
+   resulting connection (however a denial-of-service attack is
+   possible).
+
+ * Opportunistic mode ([RFC7435]) starts with cleartext as a baseline
+   with upgrade to encrypted transport and authentication of the
+   connection when available. This is a best effort attempt to set up
+   an encrypted DNS transport connection. This can provide enhanced
+   privacy against a passive attacker. However an active attacker may
+   be able to force a downgrade to unencrypted DNS.
+
+Opportunistic mode can proceed based on, for example, probing of server
+capabilities (as in {{!RFC9539}}) however a mechanism to signal such
+capabilities has a number of advantages.
+
 Existing efforts to signal service connection information, such as the
 SVCB and HTTPS DNS records {{!RFC9460}} {{!RFC9461}}, primarily focus
 on service discovery mechanisms where a client explicitly queries for
@@ -101,16 +132,57 @@ these records, often from a parent zone. While robust, this approach
 can introduce additional latency and requires explicit configuration
 at the parent zone level.
 
-This document proposes a "DNS Opportunistic Transport Signaling" (DNS
-OTS) mechanism. DNS OTS, aka an "OTS Hint" allows an authoritative DNS
-nameserver to directly convey its transport capabilities as a hint
-within the Additional section of responses to queries where it
-identifies itself as an authoritative nameserver for the requested
-zone. This direct, in-band signaling provides a low-latency discovery
-path, even when a formal, validated signal is not available.
-Furthermore, this is achieved without any changes to the DNS Protocol.
+This document proposes a new hint-based "DNS Opportunistic Transport
+Signaling" (DTS) mechanism. DTS, aka an "DTS Hint" allows an
+authoritative DNS nameserver to directly convey its transport
+capabilities as a hint within the Additional section of responses to
+queries where it identifies itself as an authoritative nameserver for
+the requested zone. This direct, in-band signaling provides a
+low-latency discovery path, even when a formal, validated signal is
+not available.  Furthermore, this is achieved without any changes to
+the DNS Protocol.
 
-## 1.1. Prior Art
+The information conveyed by this hint alone signals only the
+capabilities of the authoritative nameserver serving the zone. It does
+not, therefore, establish a full chain of trust directly to the zone
+itself and should be considered as insecure. It should not be used as
+a basis of a Strict policy, only to enable Opportunistic
+transport. However, receiving such a signal enables resolvers to
+immediately attempt to establish an opportunistically encrypted
+connection to the resolver without further queries being required.
+
+The focus of this document is the hint-based signaling of transport
+capabilities, however Section X outlines in detail the specific
+requirements for how DNSSEC signed authoritatives can provide, and
+willing resolvers can directly query for, a set of records than can
+securely provide authentication information for an authoritative
+nameserver that a resolver could then use to implement a Strict usage
+policy.
+
+## 1.1. Confidentiality
+
+The above text discusses discovery of transport signals and
+authentication information in queries made by the recursive
+resolver. Those queries may or may not occur over encrypted or
+authenticated connections. Only when all the connections are
+authenticated are all the queries protected from active
+surveillance. If all the connections are opportunistically encrypted
+then the queries are protected from passive surveillance. Otherwise
+they may occur in cleartext, or a combination of circumstances may
+exist.
+
+Such queries leak the name of the zone that the resolver wishes to
+ultimately query which in itself can be sensitive. During the early
+stages of the incremental rollout of technologies such as recursive to
+authoritative encrypted connections it is unlikely that fully
+confidential discovery will be possible due to the nature of the DNS
+hierarchy. However, if large TLDs and/or those hosted by large CDNs
+support encrypted transports a significant number of queries from busy
+resolvers to discovery information on TLD child zones (and below)
+could be performed confidentially thereby greatly improving the
+privacy over the current situation.
+
+## 1.2. Prior Art
 
 An attempt at utilizing more modern, and in particular, more private
 transports between resolvers and authoritative nameservers was
@@ -136,7 +208,7 @@ within the current DNS protocol. Therefore the transport signaling
 provided will be opportunistic, and as such fit well as an improvement
 to {{!RFC9539}}.
 
-## Rationale for Using the Additional Section (moved)
+## 1.3. Rationale for Using the Additional Section
 
 See Appendix A for the rationale for using the Additional section for the transport signaling hint.
 
@@ -205,7 +277,8 @@ downgrade to unencrypted DNS.
 
 ## 3.1. Description of Problem Space
 
-This section looks at the various configurations that need to be supported.
+This section looks at the various configurations that need to be
+supported.
 
 In opportunistic mode, the authoritative server needs to provide the
 recursive resolver with the transport signaling record even when the
