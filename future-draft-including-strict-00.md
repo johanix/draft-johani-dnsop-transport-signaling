@@ -60,7 +60,7 @@ signaling may either be provided within the Additional section of
 authoritative DNS responses or be the result of direct DNS queries.
 
 The former, "opportunistic mode" is hint-based and aims to enable resolvers
-to discover and upgrade transport connections more efficiently, thereby
+to discover and upgrade transport connections efficiently, thereby
 improving privacy, security, and performance for subsequent interactions.
 The mechanism is designed to not require any protocol change. It is
 safe, backward-compatible, and effective even when DNSSEC validation
@@ -134,7 +134,7 @@ be opportunistic, and as such fit well as an improvement to {{!RFC9539}}.
 
 ## Rationale for Using the Additional Section (moved)
 
-See Appendix A for the rationale for using the Additional section.
+See Appendix A for the rationale for using the Additional section for the transport signaling hint.
 
 # 2. Terminology
 
