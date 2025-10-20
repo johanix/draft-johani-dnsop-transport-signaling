@@ -35,9 +35,15 @@ author:
  -
   ins: P. Homberg
   name: Philip Homberg
-  organization: NLNet Labs
+  organization: NLnet Labs
   country: The Netherlands
   email: philip@nlnetlabs.nl
+-
+  ins: S. Dickinson
+  name: Sara Dickinson
+  organization: Sinodun IT
+  country: United Kingdom
+  email: sara@sinodun.com
 
 normative:
   RFC2119:
@@ -390,8 +396,8 @@ successfully validated to the appropriate trust anchor.
   its RRSIGs.
 - When validated, the resolver MAY use all fields of the SVCB RDATA
   for connection establishment and policy decisions, including:
-  - alpn: positive transport signals (e.g., dot, doq) and any
-    explicitly negative transport signals (see below).
+  - alpn: positive transport signals (e.g., dot, doq) and the
+    negative transport signal "-do53" (if present).
   - ipv4hint / ipv6hint: address hints for the authoritative
     nameserver.
   - tlsa: a new SVCB parameter defined by this document that conveys
@@ -400,8 +406,8 @@ successfully validated to the appropriate trust anchor.
 - If a validated SVCB contains the explicit negative transport signal
   "-do53", the resolver SHOULD honor it. The "-do53" signal indicates
   that legacy UDP/TCP is NOT supported by this authoritative
-  nameserver and the resolver SHOULD attempt only the positively
-  advertised alternatives. If all transport alternatives fail in the
+  nameserver and the resolver SHOULD attempt only other advertised
+  transports (if any). If all transport alternatives fail in the
   validated case the resolver SHOULD treat that server as unreachable
   and prefer other authoritative servers for the zone.
 
@@ -412,18 +418,18 @@ successfully validated to the appropriate trust anchor.
 - A validated Opportunistic transport signal is equivalent to a
   Validated transport signal for policy and usage purposes.
 - An Opportunistic (unvalidated) transport signal MUST NOT be used to
-  enforce negative policy ("-do53"), alter addressing
+  enforce negative transport policy ("-do53"), alter addressing
   ("ipv4hint/ipv6hint"), or bootstrap authentication material
   ("tlsa").
 
-## 3.4. Caching and No-OTS
+## 3.4. Caching and No-DTS
 
 - Resolvers MAY cache Validated-mode SVCB information according to its
-  TTL and MAY use the EDNS(0) No-OTS option to avoid redundant hints
+  TTL and MAY use the EDNS(0) No-DTS option to avoid redundant hints
   when sufficient information is cached.
 - In Opportunistic mode, resolvers MAY cache positive "alpn" results
   subject to local policy (see Resolver Caching Strategies). When a
-  resolver has sufficient cached information, it SHOULD set No-OTS to
+  resolver has sufficient cached information, it SHOULD set No-DTS to
   reduce response size and limit unnecessary hints.
 
 ## 3.5. Summary of Permitted Use by Mode
@@ -456,9 +462,9 @@ EDNS(0) option that defines an OPT-OUT capability.
 
 # 5. Authoritative Nameserver Behaviour
 
-## 5.1. Trigger Conditions for Including the OTS Hint
+## 5.1. Trigger Conditions for Including the DTS Hint
 
-An authoritative nameserver SHOULD include an OTS Hint when *all* of
+An authoritative nameserver SHOULD include an DTS Hint when *all* of
 the following conditions are met:
 
 1. **Self-Identification:** The responding authoritative own Fully
@@ -475,7 +481,7 @@ the following conditions are met:
 3. **SVCB not present in Answer:** If the SVCB record is present in
    the Answer section (because it was explicitly queried for), then it
    does not have to be included again in the Additional section,
-   regardless of whether the resolver has set the OTS Option or not.
+   regardless of whether the resolver has set the DTS Option or not.
 
 ## 5.2. Multiple Server Identities
 
@@ -489,7 +495,7 @@ of the specific name used in the NS RRset.
 
 ## 5.3. Format of the DNS Transport Signal SVCB Record
 
-The OTS Hint MUST be an SVCB record with the following
+The DTS Hint MUST be an SVCB record with the following
 characteristics:
 
 * **OWNER:** The owner name of the SVCB record MUST be the label
@@ -583,7 +589,7 @@ Furthermore, as the zone example.com is signed it is possible to
 include the SVCB.
 
 Note: the requirement for the SVCB record to be included only if it is
-DNSSEC-signed has the consequence that the OTS transport signal cannot
+DNSSEC-signed has the consequence that the DTS transport signal cannot
 be present for an unsigned zone using vanity names in the zone for its
 nameservers.
 
@@ -602,10 +608,9 @@ Additional:
 ~~~
 Because the resolver uses Validated mode (by querying for the SVCB record at
 _dns.<nameserver FQDN> and validating the response) all data in the received
-SVCB record MAY be used. In this case that includes the negative signal "-do53",
-which will effectively turn off
-UDP/TCP use by the resolver for communicating with this particular authoritative
-nameserver.
+SVCB record MAY be used. In this case that includes the negative transport
+signal "-do53", which will effectively turn off UDP/TCP use by the resolver for
+communicating with this particular authoritative nameserver.
 
 # 6. Recursive Nameserver Behavior
 
@@ -617,13 +622,13 @@ following logic:
 1. **OPT-OUT Possibility:** If the resolver already thinks that it
    knows the transport capabilities of the authoritative nameserver it
    is about to send a query to it may opt out from DNS transport
-   signaling by including an EDNS(0) "No-OTS" option in the query.
+   signaling by including an EDNS(0) "No-DTS" option in the query.
 
-   It is important to be aware that using the No-OTS option
+   It is important to be aware that using the No-DTS option
    consistently will make the resolver blind to any changes in the
    transport signals, which is clearly not acceptable. Hence any use
-   of "No-OTS" should be restricted to only be used within the TTL of
-   an already received and parsed OTS Hint.
+   of "No-DTS" should be restricted to only be used within the TTL of
+   an already received and parsed DTS Hint.
 
 ## 6.2. When Receiving Responses
 
@@ -634,10 +639,10 @@ following logic:
 2. **Owner Check:** If an SVCB record is found whose owner name
    matches the "_dns" label followed by an authoritative nameserver
    name for the zone to which the query belongs, the resolver MAY
-   consider this an OTS Hint.
+   consider this an DTS Hint.
 
 3. **DNSSEC Validation (Optional but Recommended):** 
-   * The resolver SHOULD attempt to DNSSEC validate the OTS Hint. This
+   * The resolver SHOULD attempt to DNSSEC validate the DTS Hint. This
    involves validating the SVCB record itself and its corresponding
    RRSIG (if present) against the DNSSEC chain of trust for the zone
    that owns the SVCB record (e.g., dnsprovider.com for
@@ -649,7 +654,7 @@ following logic:
    choices for subsequent queries to that specific authoritative
    nameserver.
 
-   * If validation fails, or no RRSIG is present: The OTS Hint MUST be
+   * If validation fails, or no RRSIG is present: The DTS Hint MUST be
    treated as an **unvalidated hint**. The resolver MAY still
    opportunistically attempt to use the signaled alternative
    transports, but MUST be prepared for immediate fallback to
@@ -661,15 +666,15 @@ following logic:
 4. **Prioritization:**
 * Any DNSSEC-validated SVCB record found via explicit query (e.g.,
 _dns.ns.example.com for a queried domain) MUST take precedence over
-any unvalidated OTS Hint.
+any unvalidated DTS Hint.
 
-* The OTS Hint is a mechanism to *discover* capabilities
+* The DTS Hint is a mechanism to *discover* capabilities
 opportunistically, not to override trusted delegation or service
 configuration.
 
 5. Fallback: Resolvers MUST always be prepared to fall back to
 traditional UDP/TCP transport if an attempt to use an alternative
-transport based on an OTS Hint (especially an unvalidated one) fails
+transport based on an DTS Hint (especially an unvalidated one) fails
 or times out.
 
 ## 6.3. Upgrading the DNS Transport Signal
@@ -684,36 +689,36 @@ Validated mode, and then use all the information in the SVCB record
 ## 6.4. Authentication of the Authoritative Nameserver
 
 Authentication of the authoritative nameserver is not an explicit
-goal. The reason is that as an opportunistic mechanism it will not
-always be possible to do such authentication. Some of the options that
-do exist are listed below.
-
-Authentication of the authoritative nameserver may be done either by
-validation of a DNSSEC RRSIG over the SVCB record containing the OTS
-Hint or by verification of the server certificate presented in the set
-up of the communication (be it over DoT, DoQ or DoH).
-
-As there will not always be a DNSSEC signature to validate that option
-is opportunistic at best. Likewise, while it may sometimes be possible
-to validate the server cert against a DNSSEC-signed TLSA record, it
-will not always be an option.
-
-Finally, validating the server cert against a list of well-known
-public Certificate Authorities is possible, but there is no
-standardized way to determine which CAs are appropriate for DNS server
-certificates.
+goal in opportunistic mode. The reason is that as an opportunistic
+mechanism it will not always be possible to do such authentication.
 
 However, even without strong authentication of the authoritative
 server the proposed mechanism still provides benefits (privacy,
 potential performance improvements) and for that reason cryptographic
 verification of the server identity is not a requirement.
 
+In validated mode authentication of the authoritative nameserver is done
+by validation of the DNSSEC RRSIG over the SVCB record containing the DTS
+Hint.
+
+<!--
+As there will not always be a DNSSEC signature to validate that option
+is opportunistic at best. Likewise, while it may sometimes be possible
+to validate the server cert against a DNSSEC-signed TLSA record, it
+will not always be an option.
+-->
+
+Finally, validating the server cert against a list of well-known
+public Certificate Authorities is possible, but there is no
+standardized way to determine which CAs are appropriate for DNS server
+certificates.
+
 ## 6.5. Resolver Caching Strategies
 
-Resolvers implementing the DNS OTS Hint mechanism have several options
-for caching the transport signals received via OTS Hints.
+Resolvers implementing the DNS DTS Hint mechanism have several options
+for caching the transport signals received via DTS Hints.
 
-A suggested primary strategy is to set the EDNS(0) No-OTS option when
+A suggested primary strategy is to set the EDNS(0) No-DTS option when
 no transport signaling information is needed. This may be because the
 resolver already knows the authoritative nameserver's transport
 capabilities from a previous response (with a TTL that has not
@@ -729,7 +734,7 @@ For a more detailed analysis of possible caching logic, see
 {{!RFC9539}}, section 4.
 
 Note that the resolver always has the option of not using the EDNS(0)
-No-OTS option whenever the cache entry is getting close to expiry.
+No-DTS option whenever the cache entry is getting close to expiry.
 
 Given the variety of deployment scenarios and operational
 requirements, this document does not mandate a specific caching
@@ -745,18 +750,18 @@ The chosen strategy SHOULD be documented in the implementation's
 configuration options to allow operators to make informed decisions
 about its use.
 
-# 7. The EDNS(0) No-OTS Option
+# 7. The EDNS(0) No-DTS Option
 
 To provide a mechanism for resolvers to explicitly opt out of
 receiving transport signals, this document defines a new EDNS(0)
-option called "No-OTS" (NOTS). When included in a query, this option
-signals to the authoritative server that the resolver does not want to
-receive any transport signals in the response.
+option called "No-DTS". When included in a query, this option signals
+to the authoritative server that the resolver does not want to receive
+any transport signals in the response.
 
-The typical use case is to set the EDNS(0) No-OTS option when the
+The typical use case is to set the EDNS(0) No-DTS option when the
 resolver already has the transport information it needs.
 
-The EDNS(0) No-OTS option is structured as follows:
+The EDNS(0) No-DTS option is structured as follows:
 
 ~~~
                                               1   1   1   1   1   1
@@ -772,15 +777,15 @@ Field definition details:
 
 OPTION-CODE:
     2 octets / 16 bits (defined in {{!RFC6891}}) contains the value TBD
-    for No-OTS.
+    for No-DTS.
 
 OPTION-LENGTH:
     2 octets / 16 bits (defined in {{!RFC6891}}) contains
-    the length of the payload in octets. For the No-OTS option, this
+    the length of the payload in octets. For the No-DTS option, this
     value MUST be 0 as there is no payload.
 
 When an authoritative server receives a query containing the EDNS(0)
-No-OTS option, it SHOULD NOT include any OTS Hints in the response,
+No-DTS option, it SHOULD NOT include any DTS Hints in the response,
 regardless of whether it would normally do so based on the conditions
 described in Section 5.1.
 
@@ -796,7 +801,7 @@ transport signals, which may be useful in scenarios where:
 * The resolver is operating in an environment where transport signals
   are not needed or desired
 
-The No-OTS option is designed to be a simple, lightweight mechanism
+The No-DTS option is designed to be a simple, lightweight mechanism
 that can be used to disable transport signaling without affecting the
 normal operation of DNS resolution.
 
@@ -815,7 +820,7 @@ filtered, as it is an integral part of an upcoming protocol change.
 The opportunistic mechanism described here has the major advantage of
 being available immediately without any changes to the DNS
 protocol. Furthermore, as it is a signal directly from an
-authoritative nameserver, a single OTS Hint may allow the recipient
+authoritative nameserver, a single DTS Hint may allow the recipient
 recursive nameserver to upgrade the transport used for all the zones
 served by that authoritative nameserver (which may be millions)
 without the need to make any changes to the zones, nor to the parent
@@ -830,7 +835,7 @@ effort.
 
 # 9. Security Considerations
 
-* **Spoofing of Unvalidated Hints:** An OTS Hint that cannot be DNSSEC
+* **Spoofing of Unvalidated Hints:** An DTS Hint that cannot be DNSSEC
 validated (e.g., for ns.example.com where example.com is unsigned) is
 susceptible to spoofing by an on-path attacker. Such an attacker could
 insert a fake SVCB record advertising a non-existing transport,
@@ -842,7 +847,7 @@ actual DNS data remains unaffected. The cryptographic validation of
 TLS/QUIC (via X.509 certificates) for DoT/DoQ would still protect the
 integrity and privacy of the connection itself.
 
-* **DNSSEC Validation:** When a OTS Hint is signed by DNSSEC (e.g.,
+* **DNSSEC Validation:** When a DTS Hint is signed by DNSSEC (e.g.,
 the ns.dnsprovider.net SVCB record from a signed dnsprovider.net
 zone), it provides a trusted signal. Resolvers SHOULD leverage DNSSEC
 validation to distinguish between trusted and unvalidated hints.
@@ -853,14 +858,14 @@ discovery. It relies on the existing security properties of DoT, DoH
 and DoQ for actual session security.
 
 * **Safe Rollout:** As existing recursive nameservers carefully avoid
-data in the Additional section that they do not need, the OTS Hint
+data in the Additional section that they do not need, the DTS Hint
 will be ignored by everyone except recursive nameservers that
-understand the OTS Hint.
+understand the DTS Hint.
 
-* **No-OTS enables a downgrade attack:** If an attacker is able to
-inject a No-OTS option to an outbound query then no transport signal
+* **No-DTS enables a downgrade attack:** If an attacker is able to
+inject a No-DTS option to an outbound query then no transport signal
 will be provided. However, this is a consequence of the opportunistic
-nature of the OTS Hint and not worse than not being able to do
+nature of the DTS Hint and not worse than not being able to do
 transport signaling at all.
 
 # 10. Operational Considerations
@@ -870,7 +875,7 @@ section will increase the size of UDP responses. Authoritative server
 operators should consider the potential for UDP fragmentation or TCP
 fallback if responses become excessively large, though a single SVCB
 record is typically small. Recursive nameservers should usually set
-the EDNS(0) No-OTS when they already have the transport signaling
+the EDNS(0) No-DTS when they already have the transport signaling
 information.
 
 * **Server Configuration:** Authoritative server implementations will
@@ -889,16 +894,16 @@ consumption, etc) is considered.
 
 # 11. IANA Considerations
 
-## 11.1. No-OTS EDNS(0) Option
+## 11.1. No-DTS EDNS(0) Option
 
-This document defines a new EDNS(0) option, entitled "No-OTS",
+This document defines a new EDNS(0) option, entitled "No-DTS",
 assigned a value of TBD in the "DNS EDNS0 Option Codes" registry.
 
 ~~~
    +-------+--------------------------+----------+----------------------+
    | Value | Name                     | Status   | Reference            |
    +-------+--------------------------+----------+----------------------+
-   | TBD   | No-OTS                   | Standard | ( This document )    |
+   | TBD   | No-DTS                   | Standard | ( This document )    |
    +-------+--------------------------+----------+----------------------+
 ~~~
 
@@ -966,10 +971,10 @@ software. This property makes it possible to essentially deploy the
 proposed mechanism immediately, as it will not cause problems with
 existing DNS infrastructure.
 
-* Existing authoritative nameservers will not provide any OTS Hint in
+* Existing authoritative nameservers will not provide any DTS Hint in
   the Additional section.
 
-* Existing resolvers will actively ignore any OTS Hint in the
+* Existing resolvers will actively ignore any DTS Hint in the
   Additional section.
 
 Only DNS nameservers (authoritative or recursive) that are aware of
