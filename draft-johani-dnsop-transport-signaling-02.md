@@ -152,7 +152,7 @@ immediately attempt to establish an opportunistically encrypted
 connection to the resolver without further queries being required.
 
 The focus of this document is the hint-based signaling of transport
-capabilities, however Section X outlines in detail the specific
+capabilities, however Section 6.2 outlines in detail the specific
 requirements for how DNSSEC signed authoritatives can provide, and
 willing resolvers can directly query for, a set of records than can
 securely provide authentication information for an authoritative
@@ -320,13 +320,15 @@ nameservers in a validated way is impossible.
 
 The remaining cases can be analysed as follows.
 
+<!--
 If the parent provides a path to validate the delegation, the resolver
 can receive a trusted (delegation) NS RRset from the
 parent. Otherwise, the resolver has to obtain the apex NS RRset from
 the child and verify that the apex NS RRset is DNSSEC secure.
+-->
 
 If the zone that holds the nameserver records is DNSSEC secure then it
-is often sufficient if the nameserver adds transport signaling along
+is often sufficient if the nameserver adds DNS transport signaling along
 with an A or AAAA response (including signatures).
 
 If no signed signaling is received opportunistically then the resolver
@@ -344,7 +346,7 @@ Yada, yada.
 
 ### 3.2.1. Opportunistic Mode
 
-Opportunistic mode applies when the OTS Hint (the SVCB record) for the
+Opportunistic mode applies when the DTS Hint (the SVCB record) for the
 authoritative nameserver is received opportunistically in the
 Additional section as part of the response to a DNS query for
 something else. The hint may or may not be DNSSEC-signed and may or
@@ -352,13 +354,13 @@ may not be successfully validated by the resolver.
 
 #### Behavior:
 
-- If the opportunistic SVCB and its signatures are DNSSEC-validated,
+- If the SVCB record and its signatures are DNSSEC-validated,
   the resolver MAY treat it equivalently to Validated mode for the
   corresponding data.
-- If the opportunistic SVCB is not validated (e.g., unsigned, or
+- If the SVCB record is not validated (e.g., unsigned, or
   validation fails), then:
-  - The resolver MAY use only positive "alpn" entries to attempt an
-    upgrade (e.g., dot, doq).
+  - The resolver MAY use only positive "alpn" entries to attempt a
+    transport upgrade (e.g., dot, doq).
   - The resolver MUST ignore the negative transport signal "-do53", if
     present.
   - The resolver MUST ignore ipv4hint, ipv6hint, tlsa, and any other
