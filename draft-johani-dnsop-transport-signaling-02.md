@@ -145,9 +145,8 @@ the DNS Protocol.
 The information conveyed by this hint alone signals only the
 capabilities of the authoritative nameserver serving the zone. It does
 not, therefore, establish a full chain of trust directly to the zone
-itself and should be considered as insecure. It should not be used as
-a basis of a Strict policy, only to enable Opportunistic
-transport. However, receiving such a signal enables resolvers to
+itself and should be considered as insecure.
+However, receiving such a signal enables resolvers to
 immediately attempt to establish an opportunistically encrypted
 connection to the resolver without further queries being required.
 
@@ -283,15 +282,6 @@ supported.
 In opportunistic mode, the authoritative server needs to provide the
 recursive resolver with the transport signaling record even when the
 recursive resolver does not explicitly ask for it. For example by
-adding it to the result of an A or AAAA query for a nameserver. The
-recursive resolver accepts such an additional record.
-
-This section looks at the various configurations that need to be
-supported.
-
-In opportunistic mode, the authoritative server needs to provide the
-recursive resolver with the transport signaling record even when the
-recursive resolver does not explicitly ask for it. For example by
 adding it to the result of an A or AAAA query for a name server. The
 recursive resolver accepts such a record and uses it to set up a
 secure transport.
@@ -368,9 +358,7 @@ may not be successfully validated by the resolver.
   corresponding data.
 - If the opportunistic SVCB is not validated (e.g., unsigned, or
   validation fails), then:
-  - The resolver MAY use only positive "alpn" entries to attempt an
-    upgrade (e.g., dot, doq).
-  - The resolver MUST ignore the negative transport signal "-do53", if
+  - The resolver MUST ignore the transport signal "-do53", if
     present.
   - The resolver MUST ignore ipv4hint, ipv6hint, tlsa, and any other
     parameters that affect addressing or authentication.
@@ -381,7 +369,7 @@ may not be successfully validated by the resolver.
 
 - Opportunistic mode enables low-latency discovery without requiring
   changes at parent zones or prior configuration, while containing
-  risk by limiting use of unvalidated data to only positive upgrade
+  risk by limiting use of unvalidated data to only upgrade
   attempts.
 
 ### 3.2.2. Validated Mode
@@ -399,17 +387,16 @@ successfully validated to the appropriate trust anchor.
   its RRSIGs.
 - When validated, the resolver MAY use all fields of the SVCB RDATA
   for connection establishment and policy decisions, including:
-  - alpn: positive transport signals (e.g., dot, doq) and any
-    explicitly negative transport signals (see below).
+  - alpn: transport signals (e.g., dot, doq, -do53)
   - ipv4hint / ipv6hint: address hints for the authoritative
     nameserver.
   - tlsa: a new SVCB parameter defined by this document that conveys
     the TLSA record to authenticate TLS/QUIC connections to the
     authoritative nameserver.
-- If a validated SVCB contains the explicit negative transport signal
+- If a validated SVCB contains the transport signal
   "-do53", the resolver SHOULD honor it. The "-do53" signal indicates
   that legacy UDP/TCP is NOT supported by this authoritative
-  nameserver and the resolver SHOULD attempt only the positively
+  nameserver and the resolver SHOULD attempt the remaining
   advertised alternatives. If all transport alternatives fail in the
   validated case the resolver SHOULD treat that server as unreachable
   and prefer other authoritative servers for the zone.
@@ -421,7 +408,7 @@ successfully validated to the appropriate trust anchor.
 - A validated Opportunistic transport signal is equivalent to a
   Validated transport signal for policy and usage purposes.
 - An Opportunistic (unvalidated) transport signal MUST NOT be used to
-  enforce negative policy ("-do53"), alter addressing
+  enforce policy "-do53", alter addressing
   ("ipv4hint/ipv6hint"), or bootstrap authentication material
   ("tlsa").
 
@@ -430,7 +417,7 @@ successfully validated to the appropriate trust anchor.
 - Resolvers MAY cache Validated-mode SVCB information according to its
   TTL and MAY use the EDNS(0) No-OTS option to avoid redundant hints
   when sufficient information is cached.
-- In Opportunistic mode, resolvers MAY cache positive "alpn" results
+- In Opportunistic mode, resolvers MAY cache "alpn" results
   subject to local policy (see Resolver Caching Strategies). When a
   resolver has sufficient cached information, it SHOULD set No-OTS to
   reduce response size and limit unnecessary hints.
@@ -611,7 +598,7 @@ Additional:
 ~~~
 Because the resolver uses Validated mode (by querying for the SVCB record at
 _dns.<nameserver FQDN> and validating the response) all data in the received
-SVCB record MAY be used. In this case that includes the negative signal "-do53",
+SVCB record MAY be used. In this case that includes the signal "-do53",
 which will effectively turn off
 UDP/TCP use by the resolver for communicating with this particular authoritative
 nameserver.
@@ -1010,15 +997,15 @@ signaling has vastly more benefits than drawbacks.
 If the transport signal is present in the Additional section, it may
 or may not be possible to validate it (if it has a DNSSEC signature).
 
-This is necessary to bee able to trust more sensitive signals. A
-positive signal inserted by an on-path attacker (eg. claiming DoQ
-support when this is false) would not be catastrophic. However, a
-false negative alpn="-do53" signal (eg. claiming no Do53 support
+This is necessary to bee able to trust more sensitive signals. An
+upgrading signal such as alpt="doq" inserted by an on-path attacker
+would not be catastrophic. However, a
+spoofed alpn="-do53" signal (eg. claiming no Do53 support
 while such support is present) would be potentially catastrophic. For
 this reason (ability to trust more sensitive signals) the connection
 between resolver and authoritative server must be in Validated Mode.
 
-# Appendix B. SVCB ALPN Negative Tokens
+# Appendix B. SVCB ALPN -do53 TOKEN
 
 This appendix defines a presentation-time extension to the SVCB "alpn"
 parameter that allows an authoritative nameserver to signal explicit
@@ -1027,11 +1014,11 @@ hyphen ("-"). For example, "-do53" indicates that legacy UDP/TCP
 transport is not supported.
 
 Processing rules:
-- The "-do53" negative token is only actionable when the SVCB RRset is
+- The "-do53" token is only actionable when the SVCB RRset is
   DNSSEC-validated (Validated mode). In these cases, resolvers SHOULD
   honor the "-do53" token when selecting transports.
 - In Opportunistic (unvalidated) mode, resolvers MUST ignore the
-  "-do53" negative token.
+  "-do53" token.
 
 Examples:
 - alpn="dot,doq"           -> Indicates support for DoT and DoQ.
@@ -1039,7 +1026,7 @@ Examples:
 - alpn="-do53,doq,dot"     -> Indicates no Do53; prefer DoQ/DoT (validated modes only).
 
 Interoperability considerations:
-- Implementations that do not understand the alpn "-do53" negative
+- Implementations that do not understand the alpn "-do53"
   token will ignore it per SVCB parameter processing and remain
   interoperable.
 - This alpn token does not alter on-the-wire encoding for ALPN; it is
