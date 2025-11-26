@@ -14,49 +14,36 @@ stand_alone: yes
 pi: [toc, sortrefs, symrefs]
 
 author:
- -
-  ins: J. Stenstam
-  name: Johan Stenstam
-  organization: The Swedish Internet Foundation
-  country: Sweden
-  email: johan.stenstam@internetstiftelsen.se
- -
-  ins: L. Fernandez
-  name: Leon Fernandez
-  organization: The Swedish Internet Foundation
-  country: Sweden
-  email: leon.fernandez@internetstiftelsen.se
- -
-  ins: E. Bergström
-  name: Erik Bergström
-  organization: The Swedish Internet Foundation
-  country: Sweden
-  email: erik.bergstrom@internetstiftelsen.se
- -
-  ins: P. Homberg
-  name: Philip Homberg
-  organization: NLnet Labs
-  country: The Netherlands
-  email: philip@nlnetlabs.nl
--
-  ins: S. Dickinson
-  name: Sara Dickinson
-  organization: Sinodun IT
-  country: United Kingdom
-  email: sara@sinodun.com
+  - ins: J. Stenstam
+    name: Johan Stenstam
+    organization: The Swedish Internet Foundation
+    country: Sweden
+    email: johan.stenstam@internetstiftelsen.se
+  - ins: L. Fernandez
+    name: Leon Fernandez
+    organization: The Swedish Internet Foundation
+    country: Sweden
+    email: leon.fernandez@internetstiftelsen.se
+  - ins: E. Bergström
+    name: Erik Bergström
+    organization: The Swedish Internet Foundation
+    country: Sweden
+    email: erik.bergstrom@internetstiftelsen.se
+  - ins: P. Homberg
+    name: Philip Homberg
+    organization: NLnet Labs
+    country: The Netherlands
+    email: philip@nlnetlabs.nl
+  - ins: S. Dickinson
+    name: Sara Dickinson
+    organization: Sinodun IT
+    country: United Kingdom
+    email: sara@sinodun.com
 
 normative:
-  RFC2119:
-  RFC8174:
-  RFC7858:
-  RFC9460:
-  RFC9461:
-  RFC9250:
-  RFC6891:
 
 informative:
-  RFC9539:
-  I-D.draft-ietf-deleg:
+
 --- abstract
 
 This document proposes a mechanism for authoritative DNS servers to
@@ -120,7 +107,7 @@ here:
    resulting connection (however a denial-of-service attack is
    possible).
 
- * Opportunistic mode ([RFC7435]) starts with cleartext as a baseline
+ * Opportunistic mode ({{!RFC7435}}) starts with cleartext as a baseline
    with upgrade to encrypted transport and authentication of the
    connection when available. This is a best effort attempt to set up
    an encrypted DNS transport connection. This can provide enhanced
@@ -139,14 +126,13 @@ can introduce additional latency and requires explicit configuration
 at the parent zone level.
 
 This document proposes a new hint-based "DNS Transport Signaling" (DTS)
-mechanism. DTS, aka an "DTS Hint" allows an
-authoritative DNS nameserver to directly convey its transport
-capabilities as a hint within the Additional section of responses to
-queries where it identifies itself as an authoritative nameserver for
-the requested zone. This direct, in-band signaling provides a
-low-latency discovery path, even when a formal, validated signal is
-not available.  Furthermore, this is achieved without any changes to
-the DNS Protocol.
+mechanism. DTS, aka an "DTS Hint" allows an authoritative DNS nameserver
+to directly convey its transport capabilities as a hint within the
+Additional section of responses to queries where it identifies itself as
+an authoritative nameserver for the requested zone. This direct, in-band
+signaling provides a low-latency discovery path, even when a formal,
+validated signal is not available.  Furthermore, this is achieved without
+any changes to the DNS Protocol.
 
 The information conveyed by this hint alone signals only the
 capabilities of the authoritative nameserver serving the zone. It does
@@ -339,7 +325,7 @@ with an A or AAAA response (including signatures).
 
 If no signed signaling is received opportunistically then the resolver
 SHOULD issue an explicit query for the SVCB RRset at the SVCB owner
-name (_dns.<nameserver FQDN>) to obtain a validated signal or a secure
+name (_dns.{nameserver FQDN}) to obtain a validated signal or a secure
 denial of existence.
 
 <!--
@@ -385,13 +371,13 @@ may not be successfully validated by the resolver.
 
 Validated mode applies when the resolver explicitly queries for the
 SVCB RRset at the SVCB owner name for the nameserver (i.e.,
-_dns.<nameserver FQDN>) and obtains a DNSSEC-signed response that is
+_dns.{nameserver FQDN}) and obtains a DNSSEC-signed response that is
 successfully validated to the appropriate trust anchor.
 
 #### Requirements and behavior:
 
 - The resolver MUST issue a direct query for the SVCB RRset at
-  _dns.<nameserver FQDN>.
+  _dns.{nameserver FQDN}.
 - The resolver MUST successfully DNSSEC-validate the SVCB RRset and
   its RRSIGs.
 - When validated, the resolver MAY use all fields of the SVCB RDATA
@@ -563,6 +549,8 @@ ns.dnsprovider.net. IN RRSIG A ...
 _dns.ns.dnsprovider.net. IN SVCB 1 . "alpn=doq,dot,do53"
 _dns.ns.dnsprovider.net. IN RRSIG SVCB ...
 ~~~
+
+<!--
 ### johani: broken example, to be fixed
 **Example 2:**
 
@@ -592,8 +580,8 @@ Note: the requirement for the SVCB record to be included only if it is
 DNSSEC-signed has the consequence that the DTS transport signal cannot
 be present for an unsigned zone using vanity names in the zone for its
 nameservers.
-
-**Example 3:**
+-->
+**Example 2:**
 The resolver explicitly asks for the DNS transport signal for the
 authoritative nameserver ns.dnsprovider.net. by querying
 for "_dns.ns.dnsprovider.net. SVCB":
@@ -607,7 +595,7 @@ _dns.ns.dnsprovider.net.  IN RRSIG SVCB ...
 Additional:
 ~~~
 Because the resolver uses Validated mode (by querying for the SVCB record at
-_dns.<nameserver FQDN> and validating the response) all data in the received
+_dns.{nameserver FQDN} and validating the response) all data in the received
 SVCB record MAY be used. In this case that includes the negative transport
 signal "-do53", which will effectively turn off UDP/TCP use by the resolver for
 communicating with this particular authoritative nameserver.

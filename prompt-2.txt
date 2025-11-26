@@ -1,0 +1,86 @@
+You should now write a new internet-draft based on what you have read in these documents. 
+The new document should be put in the new file draft-dts-00.md
+and it should be in markdown format. Here are your instructions:
+
+You are an experienced DNS protocol and security expert. 
+You have written several Internet-drafts before.
+
+In the document draft-johani-dnsop-transport-signaling-02.md we describe
+mechanisms for what was originally called "opportunistic DNS transport signaling"
+by use of an extra SVCB record provided by the authoritative nameserver in the
+additional section of a response to a resolver. 
+
+In the PDF document TransportSignalling.pdf we try to establish a baseline terminology.
+
+Opportunistic mode gives the
+resolver a private (as in encrypted) connection to the auth server. This is referred
+to as "P-mode" (for privacy). However, the resolver does
+not verifiably know that the auth server is authoritative for the child zone for which
+the resolver wants to issue a query. The reason is that the NS RRset in the referral from
+the parent is unsigned and hence, may be spoofed in transit by an active attacker.
+
+However, we now know that we also need to be able to express auth server capability
+in more detail, in particular auth servers may be concerned about excessive resource
+use if all traffic switched to an encrypted transport. Therefore the current proposal
+is to use a private SVCB key (tentatively called "transport") with a value in the
+format "doq:10,dot:100,do53:0". This should be interpreted as "send no more than 10%
+of the traffic over DOQ, 100% over DOT is ok and please send no traffic over do53".
+If both an alpn key and a "transport" key is provided in the SVCB then the "transport"
+key takes precedence. If only an "alpn" key/value like: 'alpn="dot,doq" is present,
+then that should be interpreted as 'transport="dot:100,doq:100". Note that the
+'alpn="-do53"' syntax has been deprecated in favour of 'transport="do53:0"' as that
+provides more control and aligns with requirements for expressing transport fractions
+for DOT and DOQ.
+
+In addition to opportunistic mode there is another connection mode which we refer
+to as "private and authenticated", or "PA-mode". For PA-mode to be possible, the
+resolver needs to verify that the auth server is an authoritative server for the
+exact child zone that the resolver needs to query about. There are two methods of verifying
+this. The easiest method is when the zone is signed. Then it is sufficent to query
+for the NS RRset, and verify the DNSSEC signature on the response. The slightly
+more complex method (needed for unsigned zones) is when the resolver has a PA-mode
+connection to one of the parent auth servers. Over this PA-mode connection it is
+possible to query the parent nameserver for the NS RRset for the child with protection
+against on-path attacks. After that the resolver absolutely knows who the auth servers
+for the child are. The remaining part is to query for the TLSA record of the auth server
+(which must be DNSSEC-signed and verified) to be able to establish a mutual-TLS
+connection to a now known auth server also known to be authoritative for the child zone.
+This is a PA-mode connection.
+
+The perhaps strongest argument for both P-mode and PA-mode connections is that they
+may be created without modifying any content in either the child zone or the parent zone.
+Hence to establish these improved connections only require (limited) effort by the 
+operators of authoritative nameservers and resolvers (i.e. not the "users").
+
+You should now write a new Internet-draft from scratch which describes these proposals.
+
+The Abstract and Introduction should describe the goal of transitioning the very integrity
+sensitive protocol DNS from cleartext to encryption as quickly as possible. Furthermore,
+it should describe that with PA-mode on-path attacks (both active and passive) become
+mostly impossible (other than in the form of denial-of-service).
+
+After the Abstract and a short introduction, the draft should have a through description
+of the threat model, including active and passive attackers (active attackers are able to
+modify packets while passive are only able to observe and read packets on the wire).
+
+Next, the draft should have a very strict terminology section. Terminology is extremely
+important, because most words either have definitions in other documents or in popular
+use. Even worse is words that have fuzzy interpretation that will vary from reader to 
+reader.
+
+Then comes sections that describe the details of achieving P-mode and PA-mode respectively.
+Use complete examples, both of an opportunistic SVCB records in the additional section
+(enabling P-mode) and subsequent explicit queries for the SVCB + TLSA to authenticate the
+auth server + (if not already known) NS + address records for the child (enabling PA-mode).
+Ensure that the section on resolver requirements to include a bit of discussion on the
+resolver must keep state for each auth server about available transports and traffic
+volumes but also for each tuple <server, zone> about the connection mode (either P-mode,
+PA-mode or neither). I.e. it must be explicit that the connection mode is per
+<server, zone> tuple, not only per auth server.
+
+Then an analysis section describing pros and cons of both P-mode and PA-mode. It should also
+make a comparision with "legacy DNS" (unsigned data over UDP/TCP) and "DNSSEC" (signed data,
+still over UDP/TCP, i.e. in cleartext).
+
+Finally, there should be a "Security Considerations" section (all internet-drafts must
+have that).

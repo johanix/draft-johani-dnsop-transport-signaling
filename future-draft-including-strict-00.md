@@ -40,17 +40,9 @@ author:
   email: philip@nlnetlabs.nl
 
 normative:
-  RFC2119:
-  RFC8174:
-  RFC7858:
-  RFC9460:
-  RFC9461:
-  RFC9250:
-  RFC6891:
 
 informative:
-  RFC9539:
-  I-D.draft-ietf-deleg:
+
 --- abstract
 
 This document proposes a mechanism for authoritative DNS servers to
