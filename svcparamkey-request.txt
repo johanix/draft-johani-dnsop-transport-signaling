@@ -1,11 +1,11 @@
-Registration Request for a New Service Parameter Key (SvcParamKey): "DNS Transport Weighting" (`transport`)
+Registration Request for a New Service Parameter Key (SvcParamKey): "Opportunistic Operator-led Transport Signal" (`oots`)
 
 Submitted for inclusion in the IANA "Service Parameter Keys (SvcParamKeys)" registry, per the procedure
 defined in Section 14.3 of RFC 9460.
 
 Number: (to be assigned by IANA)
 
-Name: transport
+Name: oots
 
 Meaning: Indicates the operator-requested traffic distribution weights for DNS transport protocols available
 at this nameserver, expressed as percentages of total expected traffic volume.
@@ -16,25 +16,31 @@ Format Reference: This document (see below).
 
 1. Wire Format
 
-The wire-format value for the "transport" SvcParamKey consists of one or more DNS transport protocol
-entries, each encoded as a 1-octet protocol identifier followed by a 1-octet unsigned integer weight value
-in the range 0–100 inclusive. The entries are concatenated without separators. The total SvcParamValue
-length is thus 2N octets, where N is the number of transport entries (N ≥ 1).
+The wire-format value for the "oots" SvcParamKey consists of one or more DNS transport protocol
+entries concatenated without separators between entries. Each entry is encoded as:
 
-Protocol identifiers are assigned as follows:
+* a protocol identifier string (ASCII, variable length), followed by
+* a single ASCII colon (":", 0x3A) separator, followed by
+* a 1-octet unsigned integer weight value in the range 0–100 inclusive.
 
-| Protocol | Identifier | Description |
-|-----|--|---------|
-| do53| 0 | DNS over UDP/TCP (traditional, port 53) |
-| dot   | 1 | DNS over TLS (RFC 7858) |
-| doh  | 2 | DNS over HTTPS (RFC 8484) |
-| doq  | 3 | DNS over QUIC (RFC 9250) |
+Because protocol identifier strings vary in length (e.g., "do53" is 4 octets, "doq" is 3 octets),
+the ":" octet is REQUIRED to delimit the protocol string from the weight octet that follows it.
+The SvcParamValue contains at least one entry (N ≥ 1).
+
+Protocol identifier strings are defined as follows:
+
+| Protocol | Identifier string | Description |
+|-----|------|---------|
+| do53 | "do53" | DNS over UDP/TCP (traditional, port 53) |
+| dot  | "dot"  | DNS over TLS (RFC 7858) |
+| doh  | "doh"  | DNS over HTTPS (RFC 8484) |
+| doq  | "doq"  | DNS over QUIC (RFC 9250) |
 
 Weight values are unsigned integers in the range [0, 100], representing the operator's assessment of the
 capacity of this nameserver to handle traffic over each transport, expressed as a percentage of total traffic
 volume. Each weight is independent of the others; a single nameserver MAY advertise a weight of 100 for
 multiple transports simultaneously, indicating full capacity on each. A weight of 0 indicates that the transport
-is not available at this nameserver. The sum of weights in a single "transport" SvcParamValue will typically exceed 100.
+is not available at this nameserver. The sum of weights in a single "oots" SvcParamValue will typically exceed 100.
 
 When a protocol entry is absent from the SvcParamValue, the following default interpretations apply:
 
@@ -45,43 +51,49 @@ When a protocol entry is absent from the SvcParamValue, the following default in
   DNS over UDP/TCP remains available unless explicitly indicated otherwise. An operator wishing to indicate
   that DNS service over UDP/TCP is not available MUST explicitly include a do53 entry with a weight of 0.
 
-Each protocol identifier MUST NOT appear more than once within a single SvcParamValue. An implementation
-receiving a "transport" SvcParamValue containing a duplicate protocol identifier MUST treat the enclosing
+Each protocol identifier string MUST NOT appear more than once within a single SvcParamValue. An implementation
+receiving an "oots" SvcParamValue containing a duplicate protocol identifier MUST treat the enclosing
 SVCB RR as malformed and ignore it.
 
-An implementation that does not recognize a protocol identifier MUST ignore that entry and continue processing
-the remaining entries.
+An implementation that does not recognize a protocol identifier string MUST ignore that entry and continue
+processing the remaining entries.
 
 2. Presentation Format
 
-The presentation format for the "transport" SvcParamKey is:
+The presentation format for the "oots" SvcParamKey is:
 
-transport="proto:weight[,proto:weight]*"
+oots="proto:weight[,proto:weight]*"
 
 Where "proto" is one of the strings "do53", "dot", "doh", or "doq", and "weight" is a decimal integer in the
 range 0–100 inclusive. Multiple entries are separated by commas with no surrounding whitespace. The order
 of entries is not significant.
 
+Note that the presentation and wire formats differ only in the encoding of the weight: in the presentation
+format the weight is written as one to three ASCII decimal digits, whereas on the wire the weight is a single
+binary octet. The protocol identifier string and the ":" separator are identical in both formats. Note also
+that the comma separator between entries appears only in the presentation format; on the wire, entries are
+concatenated without any separator.
+
 Examples:
 
-ns.example.net. 300 IN SVCB 1 . transport="do53:100,dot:10"
-ns.example.net. 300 IN SVCB 1 . transport="do53:100,dot:5,doq:5"
-ns.example.net. 300 IN SVCB 1 . transport="do53:100,dot:25,doh:10,doq:10"
+ns.example.net. 300 IN SVCB 1 . oots="do53:100,dot:10"
+ns.example.net. 300 IN SVCB 1 . oots="do53:100,dot:5,doq:5"
+ns.example.net. 300 IN SVCB 1 . oots="do53:100,dot:25,doh:10,doq:10"
 
 A "proto" string not in the set {"do53", "dot", "doh", "doq"} MUST be treated as a parse error for the
 enclosing SvcParam.
 
 3. Interactions with Other SvcParamKeys
 
-The "transport" key is independent of the "alpn", "port", "ipv4hint", and "ipv6hint" keys and MAY appear
+The "oots" key is independent of the "alpn", "port", "ipv4hint", and "ipv6hint" keys and MAY appear
 alongside any of them without conflict.
 
-The "transport" key MUST be ignored when it appears in an AliasMode SVCB record.
+The "oots" key MUST be ignored when it appears in an AliasMode SVCB record.
 
 4. Security Considerations
 
-The "transport" parameter is conveyed in DNS and is subject to the same integrity guarantees as the
-enclosing SVCB record. Operators SHOULD sign SVCB records containing "transport" with DNSSEC to
+The "oots" parameter is conveyed in DNS and is subject to the same integrity guarantees as the
+enclosing SVCB record. Operators SHOULD sign SVCB records containing "oots" with DNSSEC to
 prevent an adversary from removing or altering transport weight entries.
 
 5. Contact: ...
