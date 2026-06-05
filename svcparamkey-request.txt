@@ -19,13 +19,12 @@ Format Reference: This document (see below).
 The wire-format value for the "oots" SvcParamKey consists of one or more DNS transport protocol
 entries concatenated without separators between entries. Each entry is encoded as:
 
-* a protocol identifier string (ASCII, variable length), followed by
-* a single ASCII colon (":", 0x3A) separator, followed by
+* a 1-octet unsigned integer length L (1 ≤ L ≤ 255), giving the length in octets of the protocol
+  identifier string that follows, then
+* the protocol identifier string itself (L octets of ASCII), then
 * a 1-octet unsigned integer weight value in the range 0–100 inclusive.
 
-Because protocol identifier strings vary in length (e.g., "do53" is 4 octets, "doq" is 3 octets),
-the ":" octet is REQUIRED to delimit the protocol string from the weight octet that follows it.
-The SvcParamValue contains at least one entry (N ≥ 1).
+The total length of each entry is thus L + 2 octets. The SvcParamValue contains at least one entry (N ≥ 1).
 
 Protocol identifier strings are defined as follows:
 
@@ -35,6 +34,11 @@ Protocol identifier strings are defined as follows:
 | dot  | "dot"  | DNS over TLS (RFC 7858) |
 | doh  | "doh"  | DNS over HTTPS (RFC 8484) |
 | doq  | "doq"  | DNS over QUIC (RFC 9250) |
+
+The identifier strings "dot", "doh", and "doq" are identical to the ALPN protocol identifiers registered
+for the corresponding DNS transports and used in the "alpn" SvcParamKey (RFC 9460). The identifier
+"do53" has no ALPN equivalent (no ALPN is negotiated for traditional DNS over UDP/TCP on port 53)
+and is defined here to denote plaintext DNS service on port 53.
 
 Weight values are unsigned integers in the range [0, 100], representing the operator's assessment of the
 capacity of this nameserver to handle traffic over each transport, expressed as a percentage of total traffic
@@ -68,11 +72,12 @@ Where "proto" is one of the strings "do53", "dot", "doh", or "doq", and "weight"
 range 0–100 inclusive. Multiple entries are separated by commas with no surrounding whitespace. The order
 of entries is not significant.
 
-Note that the presentation and wire formats differ only in the encoding of the weight: in the presentation
-format the weight is written as one to three ASCII decimal digits, whereas on the wire the weight is a single
-binary octet. The protocol identifier string and the ":" separator are identical in both formats. Note also
-that the comma separator between entries appears only in the presentation format; on the wire, entries are
-concatenated without any separator.
+Note that the presentation and wire formats differ in the following ways. In the presentation format the
+protocol identifier and weight are separated by an ASCII colon (":"); on the wire there is no colon, and the
+protocol identifier string is instead preceded by a 1-octet length prefix. In the presentation format the
+weight is written as one to three ASCII decimal digits; on the wire the weight is a single binary octet.
+Multiple entries are separated by commas in the presentation format; on the wire, entries are concatenated
+without any separator.
 
 Examples:
 
