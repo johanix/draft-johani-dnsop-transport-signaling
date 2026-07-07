@@ -4,6 +4,7 @@ abbrev: "DNS Transport Signaling"
 docname: draft-johani-dnsop-transport-signaling-03
 date: {DATE}
 category: std
+stream: IETF
 
 ipr: trust200902
 area: Internet
@@ -32,7 +33,7 @@ author:
   - ins: P. Homberg
     name: Philip Homberg
     organization: NLnet Labs
-    country: The Netherlands
+    country: Netherlands
     email: philip@nlnetlabs.nl
   - ins: S. Dickinson
     name: Sara Dickinson
@@ -52,34 +53,17 @@ to signal their support for alternative transport protocols (e.g., DNS over TLS
 (DoT) and DNS over QUIC (DoQ)). These SVCB records can contain a new
 (experimental) SVCB "oots" key which contains fine grained information about
 the support for specific transports. This signaling may either be provided
-within the Additional section of authoritative DNS responses or be the result
-of direct DNS queries.
-
-The former, "Passive mode", is enabled by use of a new EDNS(0) option and allows
-resolvers to discover alternative transports efficiently with no additional queries.
-
-The latter, "Probe mode", enables recursive resolvers willing to expend
-additional overhead to obtain SVCB records via direct queries, and to
-(optionally) directly discover if DNSSEC signed SVCB records exist.
+within the Additional section of authoritative DNS responses (Passive mode) or
+be the result of direct DNS queries (Probe mode).
 
 Acquiring such SVBC records enables recursive resolvers to then
 Opportunistically upgrade connections to the authoritative to encrypted
 transports, thereby improving privacy, security, and performance for subsequent
 interactions.
 
-This document proposes an improvement on the Opportunistic (but blind)
-testing of alternative transports suggested in RFC9539 by providing a
-mechanism by which a responding authoritative server may signal what
-alternative transports it supports, along with additional information about each transport.
-
-TO BE REMOVED: This document is being collaborated on in Github at:
-[https://github.com/johanix/draft-johani-dnsop-transport-signaling](https://github.com/johanix/draft-johani-dnsop-transport-signaling).
-The most recent working version of the document, open issues, etc, should all be
-available there.  The authors (gratefully) accept pull requests.
-
 --- middle
 
-# 1. Introduction
+# Introduction
 
 The Domain Name System (DNS) primarily relies on UDP and TCP for communication
 between resolvers and authoritative servers. While these protocols are
@@ -88,15 +72,116 @@ transport protocols like DNS over TLS (DoT) {{!RFC7858}} and DNS over QUIC
 (DoQ) {{!RFC9250}} to enhance privacy, security, and performance.
 
 'Unilateral Opportunistic Deployment of Encrypted Recursive-to-Authoritative
-DNS' {!RFC9539}} describes a mechanism for how recursive resolvers can probe
+DNS' {{!RFC9539}} describes a mechanism for how recursive resolvers can probe
 authoritative servers to discover if port 853 is open in order to
 Opportunistically upgrade to an encrypted transport. However that mechanism has
 not gained widespread deployment due to a number of limitations and a
 reluctance of authoritative operators to open port 853 with no signaling
-mechanisms available. Here we propose an alternative mechanism that enables a
-more controlled deployment of Opportunistic encrypted transports.
+mechanisms available. 
 
-## 1.1 The OOTS mechanism
+Here we propose an alternative mechanism that enables a more controlled
+deployment of Opportunistic encrypted transports: Opportunistic Operator
+Transport Signaling mechanism (OOTS). This improves on the Opportunistic (but
+blind) testing of alternative transports suggested in {{RFC9539}} by providing
+a mechanism by which a responding authoritative server may signal what
+alternative transports it supports, along with additional information about
+each transport.
+
+This signaling is based on SVCB records {{!RFC9460}} which can contain a new
+(experimental) SVCB "oots" key that contains fine grained information about the
+support for specific transports. These may either be provided within the
+Additional section of authoritative DNS responses (Passive mode) or be the
+result of direct DNS queries (Probe mode). 
+
+The former, "Passive mode", is enabled by use of a new EDNS(0) option and allows
+resolvers to discover alternative transports efficiently with no additional queries.
+
+The latter, "Probe mode", enables recursive resolvers willing to expend
+additional overhead to obtain SVCB records via direct queries, and to
+(optionally) directly discover if DNSSEC signed SVCB records exist.
+
+Neither mode requires changes to the parent zone. Passive mode may require
+additional SVCB alias mode records for certain delegation patterns. 
+
+On obtaining such SVBC records recursive resolvers can then
+Opportunistically upgrade connections to the authoritative to and encrypted
+transport contained within the signaled information.
+
+This specification is expected to evolve over time based on interoperability
+testing and experimental deployments. Early work is expected to include
+comparing the two modes to see if one or the other is preferable or if both
+should be part of the long term solution. Other work will investigate if the
+structure of, and the information in, the SVCB "oots" key is useful in practice.
+
+## Structure of the document
+
+{{the-oots-mechanism}} gives an overview of the OOTS mechanism.
+
+{{oots-passive-mode}} describes Passive mode to obtain OOTS SVCB records
+
+{{oots-probe-mode}} describes Probe mode to obtain OOTS SVCB records
+
+{{discovery-of-oots-records}} and {{using-oots-records}} describe how recursive
+resolvers may then process and use those records (however they were obtained)
+including caching considerations, upgrading to encrypted connections and
+optional attempts to authenticate the authoritative server.
+
+The final sections provide a brief comparison with {{?DELEG=I-D.draft-ietf-deleg}} along with Security, Operational
+and Privacy considerations.
+
+# Github repo
+
+TO BE REMOVED: This document is being collaborated on in Github at:
+[https://github.com/johanix/draft-johani-dnsop-transport-signaling](https://github.com/johanix/draft-johani-dnsop-transport-signaling).
+The most recent working version of the document, open issues, etc, should all be
+available there.  The authors (gratefully) accept pull requests.
+
+
+# Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+"OPTIONAL" in this document are to be interpreted as described in BCP
+14 {{!RFC2119}} {{!RFC8174}} when, and only when, they appear in all
+capitals.
+
+General DNS terminology used here follows that defined in {{!RFC9499}}. A short description of a number of relevant terms described there are listed below for context along with new terms used in this document.
+
+* **Authoritative Nameserver (Auth Server):** A DNS server that holds
+the authoritative zone data for a specific domain.
+
+* **Recursive Nameserver (Resolver):** A DNS server that processes
+user queries, performing iterative lookups to authoritative servers to
+resolve domain names.
+
+* **OOTS Passive mode:** Recursive resolvers set the EDNS(0) OOTS Option in a query and authoritative servers supply EDNS(0) OOTS Responses in the Additional section if appropriate.
+
+* **OOTS Probe mode:** Recursive resolvers directly query for SVCB records of authoritative servers and process any "oots" keys in those records
+
+* **SVCB Record:** Service Binding record, as defined in {{!RFC9460}}.
+
+* **SCVB "oots" key:** New experimental Service Parameter Key (SvcParamKey)  key defined in {{!I-D.draft-johani-dnsop-svcb-oots}} which allows an operator to advertise a requested query load for each advertised transport.
+
+* **EDNS(0) OOTS Option:** New EDNS(0) flag that indicates a resolver wishes to receive OOTS SVCB records in the Additional section of the response.
+
+* **EDNS(0) OOTS Response:** An SVCB record included  in the
+Additional section of an authoritative DNS response, intended to
+signal the responding authoritative nameserver's transport
+capabilities.
+
+* **Server Identity:**   **TODO** 
+
+* **Strict and Opportunistic connection modes:** These connection modes are entirely analogous to those defined for stub to recursive connections in
+  {{!RFC8310}}. 
+   * **Strict** requires both an encrypted and authenticated connection
+  to the server based on authentication credentials that were obtained via a
+  secure mechanism. Clients MUST hard-fail the connection if this is not possible.
+   * **Opportunistic** uses cleartext as the baseline connection,
+  with encryption and authentication negotiated and applied to the connection
+  when available.
+
+
+# The OOTS mechanism
 
 The basis of the Opportunistic operator transport signaling (OOTS)
 mechanism is the existence of Service Binding records (SVCB RRs) for
@@ -104,42 +189,36 @@ authoritative nameservers that offer encrypted transports. The mechanism is
 expected to be experimental in nature in the early stages as various details of
 the discovery heuristics and signaling mechanism are explored and developed.
 
-At this stage of development the mechanism has two modes: Passive and Probe
-mode. Neither mode requires changes to the parent zone. Passive mode may
-require additional SVCB alias mode records for certain delegation patterns.
-Part of the early work will be to compare the modes to see if one or the other
-is preferable or if both should part of the long term solution.
-
-## 1.2 Authoritative Operator SVCB records
+## Authoritative Operator SVCB records
 
 Operators publish SVCB records to signal which transports they support on the
 nameservers they operate. Using an experimental code point for a new "oots"
-SVCB key {{I-D:draft-johani-dnsop-svcb-oots}}, additional attributes of those transports can be expressed e.g. requested % traffic levels.
+SVCB key {{!I-D.draft-johani-dnsop-svcb-oots}}, additional attributes of those transports can be expressed e.g. requested % traffic levels.
 
 Operators can optionally return any relevant SVCB records in the Additional
-section of queries that have the OOTS EDNS(0) option set (see Section 3.2) where
+section of queries that have the OOTS EDNS(0) option set where
 they are authoritative for the served zone. This EDNS(0) option indicates that
 the recursive resolver is actively requesting the information be returned.
 
-## 1.3 Recursive Resolvers
+## Recursive Resolvers
 
 Recursive resolvers can discover SVCB records one of two ways:
 
-* Passive mode: A recursive resolvers sets the OOTS EDNS(0) option to
-  indicate they want to receive SVCB records in the additional section if they
+* **Passive mode**: A recursive resolvers sets the OOTS EDNS(0) option to
+  indicate they want to receive SVCB records in the Additional section if they
   are available. A nameservers that is authoritative for the zone in question
   (i.e. managed by the zone operator) returns any SVCB records available for
   the authoritative nameservers when responding to a query with the OOTS EDNS(0)
   option set.
 
-* Probe mode: A recursive resolver actively probes for SVCB records for some or
+* **Probe mode**: A recursive resolver actively probes for SVCB records for some or
   all of the authoritative nameservers they query.
 
 A recursive resolver can then use the SVCB records to upgrade connections to
 encrypted transports, but should honor any attributes of the transports
 described in the SVCB records e.g. requested % traffic levels.
 
-## 1.4 Discovery and Transport Selection
+## Discovery and Transport Selection
 
 _Discovery heuristics_: The heuristics for doing SVCB discovery are an
 implementation decision since they should align with the local resolution logic
@@ -161,7 +240,7 @@ Opportunistic policy, this can and should be balanced with efficient and
 reliable query resolution. Capturing data on and developing the details of one
 or more strategies for these activities is expected to evolve over time.
 
-## 1.5 Authenticating connections
+## Authenticating connections
 
 Strict and Opportunistic connection policies for stub to recursive connections are described in {{!RFC8310}} and the terms are used analogously here.
 
@@ -181,7 +260,7 @@ question.
 Resolvers may, of course, still validate the certificate presented by the
 nameserver and log the result.
 
-## 1.6 Transport Signaling Attributes
+## Transport Signaling Attributes
 
 Desirable attributes to signal for each supported protocol include (but are not
 limited to):
@@ -190,67 +269,10 @@ limited to):
 * If the service is considered experimental
 * ...
 
-**TODO**: For discussion - what other attributes might be useful?
-
-## 1.7 Structure of the document
-
-Section 3 describes Passive mode to obtain OOTS SVCB records
-
-Section 4 describes Probe mode to obtain OOTS SVCB records
-
-Sections 5 and 6 describe how recursive resolvers may then process and use
-those records (however they were obtained) including caching considerations,
-upgrading to encrypted connections and optional attempts to authenticate the
-authoritative server.
-
-The final sections provide a brief comparison with DELEG
-({{I-D:https://datatracker.ietf.org/doc/draft-ietf-deleg/}} and
-{{draft-hoffman-deleg-secure-transports}}) along with Security, Operational
-and Privacy considerations.
-
-# 2. Terminology
-
-The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
-"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
-"OPTIONAL" in this document are to be interpreted as described in BCP
-14 {{!RFC2119}} {{!RFC8174}} when, and only when, they appear in all
-capitals.
-
-General DNS terminology used here follows that defined in {{!RFC9499}}. A short description of a number of relevant terms described there are listed below for context along with new terms used in this document.
-
-* **Authoritative Nameserver (Auth Server):** A DNS server that holds
-the authoritative zone data for a specific domain.
-
-* **Recursive Nameserver (Resolver):** A DNS server that processes
-user queries, performing iterative lookups to authoritative servers to
-resolve domain names.
-
-* **SVCB Record:** Service Binding record, as defined in {{!RFC9460}}.
-
-* **SCVB "oots" key:** New experimental Service Parameter Key (SvcParamKey)  key defined in {{I-D:draft-johani-dnsop-svcb-oots}} which allows an operator to advertise a requested query load for each advertised transport.
-
-* **EDNS(0) OOTS Option:** New EDNS(0) flag that indicates a resolver wishes to receive OOTS SVCB records in the Additional section of the response.
-
-* **EDNS(0) OOTS Response:** An SVCB record included  in the
-Additional section of an authoritative DNS response, intended to
-signal the responding authoritative nameserver's transport
-capabilities.
-
-* **Strict and Opportunistic connection modes:** These connection modes are entirely analogous to those defined for stub to recursive connections in
-  {{!RFC8310}}. Strict requires both an encrypted and authenticated connection
-  to the server based on authentication credentials that were obtained via a
-  secure mechanism. Opportunistic uses cleartext as the baseline connection,
-  with encryption and authentication negotiated and applied to the connection
-  when available.
-
-* **OOTS Passive mode:** Recursive resolvers set the EDNS(0) OOTS Option in a query and authoritative servers supply EDNS(0) OOTS Responses in the Additional section if appropriate.
-
-* **OOTS Probe mode:** Recursive resolvers directly query for SVCB records of authoritative servers and process any "oots" keys in those records
-
-* **Server Identity:** 
+**FOR DISCUSSION** What other attributes might be useful?
 
 
-# 3. OOTS Passive mode 
+# OOTS Passive mode 
 
 The core of this mechanism is for an authoritative nameserver to include an
 SVCB record containing an "oots" key in the Additional section of its responses
@@ -264,11 +286,11 @@ This signaling mechanism consists of two steps:
   query which SHOULD include SVCB records in the response if the required
   conditions are met.
 
-## 3.1 Rationale for Using the Additional Section
+##  Design decisions
 
-See Appendix A for the rationale for using the Additional section for the transport signaling EDNS(0) OOTS Response.
+See {{rationale-for-using-the-additional-section}} for the rationale for using the Additional section for the transport signaling EDNS(0) OOTS Response.
 
-## 3.2 The EDNS(0) OOTS Option
+## The EDNS(0) OOTS Option
 
 To provide a mechanism for resolvers to explicitly request to
 receive transport signals, this document defines a new EDNS(0)
@@ -284,13 +306,13 @@ cache).
 The EDNS(0) OOTS option is structured as follows:
 
 ~~~
-                                               1   1   1   1   1   1
-       0   1   2   3   4   5   6   7   8   9   0   1   2   3   4   5
-     +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
- 0:  |                            OPTION-CODE                        |
-     +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
- 2:  |                           OPTION-LENGTH                       |
-     +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+                                              1   1   1   1   1   1
+      0   1   2   3   4   5   6   7   8   9   0   1   2   3   4   5
+    +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+ 0: |                            OPTION-CODE                        |
+    +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+ 2: |                           OPTION-LENGTH                       |
+    +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
 ~~~
 
 Field definition details:
@@ -309,16 +331,16 @@ mechanism that can be used to enable transport signaling without
 affecting the normal operation of DNS resolution.
 
 
-## 3.3 Authoritative Nameserver Behavior
+## Authoritative Nameserver Behavior
 
-### 3.3.1 Trigger Conditions for Including the OOTS SVCB records
+### Trigger Conditions for Including the OOTS SVCB records
 
 An authoritative nameserver SHOULD NOT include OOTS SVCB records in a response
 if the EDNS(0) OOTS option was not present in the query.
 
-*NOTE* - During development and prototyping of this specification a valid reason that an experimental deployment might decide to include OOTS SVCB records in all responses is for testing purposes.
+**NOTE** - During development and prototyping of this specification a valid reason that an experimental deployment might decide to include OOTS SVCB records in all responses is for testing purposes.
 
-#### 3.3.1.1 Condition 1
+#### Condition 1
 
 An authoritative nameserver SHOULD include OOTS SVBC records in the Additional
 section and *all* of the following conditions are met:
@@ -348,12 +370,12 @@ RRSIG.
 it is DNSSEC-signed has the consequence that the DTS transport signal cannot be
 present for an unsigned zone using vanity names in the zone for its nameservers.
 
-#### 3.3.1.1 Condition 2
+#### Condition 2
 
-TODO: 
+**TODO** 
 
 
-### 3.3.2 Multiple Server Identities
+### Multiple Server Identities
 
 An authoritative nameserver may be known by multiple FQDNs (e.g.,
 ns1.example.com, dns.customer.org, ns.cdnprovider.net). To facilitate
@@ -363,7 +385,7 @@ identities list) where operators can list all FQDNs by which the
 server is known. This allows the server to correctly identify itself
 regardless of the specific name used in the NS RRset.
 
-### 3.3.3 Format of the OOTS SVCB records
+###  Format of the OOTS SVCB records
 
 The OOTS SVCB records are ones with the following characteristics:
 
@@ -402,6 +424,7 @@ The OOTS SVCB records are ones with the following characteristics:
 If ns.dnsprovider.net. responds to a query for www.example.com. and
 ns.dnsprovider.net is listed in the NS RRset, it may respond with a
 DNS message that contains:
+
 ~~~
 Header: ...
 
@@ -450,12 +473,12 @@ authoritative nameserver is aware of as one of its identities.
 Furthermore, as the zone example.com is signed it is possible to
 include the SVCB.-->
 
-## 3.5 Recursive Nameserver Behavior
+## Recursive Nameserver Behavior
 
 Recursive nameservers adopting this mechanism SHOULD implement the
 following logic:
 
-### 3.5.1 When Sending Queries
+### When Sending Queries
 
 1. **EDNS(0) OOTS Option:** If the resolver does not 
    know the transport capabilities of the authoritative nameserver
@@ -463,9 +486,9 @@ following logic:
    signaling by including an EDNS(0) "OOTS" option in the query.
    
    
-**TODO**: Further discussion on frequency of re-querying.
+**FOR DISCUSSION**: Further advice on frequency of re-querying.
 
-### 3.5.2 When Receiving Responses
+### When Receiving Responses
 
 1. **Parsing:** When receiving an authoritative DNS response with the EDNS(0)
    OOTS option present the resolver SHOULD parse the Additional section for SVCB
@@ -476,12 +499,12 @@ following logic:
    Answer sections of the *current* response, the resolver MAY consider
    this a valid OOTS SVCB record.
 
-# 4.OOTS Probe mode 
+# OOTS Probe mode 
 
 Recursive resolvers may also probe directly for SVCB records for any
 authoritative nameserver they need to connect to perform recursion.
 
-## 4.1 Timing of probing queries
+## Timing of probing queries
 
 The specific details of the exact timing of probe queries is left as an
 implementation/policy for the recursive resolver. For example, a nameserver
@@ -493,14 +516,15 @@ authoritative nameserver it is about to send a query to MAY
 * delay cleartext queries until the result of a probe for OOTS records is known
 * perform priming probes for an list of well known authoritative servers on start up and apply one of the above policies for all other authoritatives.
 
-**TODO**: Further discussion on frequency of re-querying.
+**FOR DISCUSSION**: Further advice on frequency of re-querying.
 
-## 4.2
+## 4.2 OOTS Probe queries
 
 **Example 1:**
 The resolver explicitly asks for the DNS transport signal for the
 authoritative nameserver ns.dnsprovider.net. by querying
 for "_dns.ns.dnsprovider.net. SVCB":
+
 ~~~
 Header: ...
 
@@ -512,7 +536,7 @@ Additional:
 ~~~
 
 
-# 5 Discovery of OOTS records
+# Discovery of OOTS records
 
 _Discovery heuristics_: The heuristics for doing SVCB discovery are an
 implementation decision since they should align with the local resolution logic
@@ -523,35 +547,34 @@ In another approach, a resolver may start in Passive mode and subsequently
 probe directly for a SVCB binding record in an attempt to obtain a DNSSEC
 signed record (if the one obtained via the OOTS Option was not signed).
 
-
 **TODO**: More discussion of mixing the two modes.
 
-# 6 Using OOTS records
+# Using OOTS records
 
 The OOTS SVCB records are a mechanism to *discover* capabilities
 of nameservers, not to override trusted delegation or service
 configuration.
 
-## 6.0 DNSSEC validation
+## DNSSEC validation
 
 **Prioritization:**
 Any DNSSEC-validated OOTS SVCB record found via an explicit probe query MUST
 take precedence over any unvalidated OOTS SVCB record
 
-3. **DNSSEC Validation (Optional but Recommended):**
+* **DNSSEC Validation (Optional but Recommended):**
 * The resolver SHOULD attempt to DNSSEC validate the OOTS SVCB record. This
 involves validating the SVCB record itself and its corresponding RRSIG
 (if present) against the DNSSEC chain of trust for the zone that owns
 the SVCB record (e.g., dnsprovider.com for ns.dnsprovider.com).
 
-* If DNSSEC validation fails the resolver SHOULD ignore the record and proceed
+* **DNSSEC Validation Failure:** If DNSSEC validation fails the resolver SHOULD ignore the record and proceed
   as if no record had been received. The result of a failed the DNSSEC
   validation can be logged for further investigation.
 
 **QUESTION**: Should the above DNSSEC restriction still apply?
 
 
-# 6.1 Upgrading connections
+## Upgrading connections
 
 _Transport selection heuristics_: Similarly, resolvers may attempt connections over
 encrypted transports at any time i.e. before sending any queries to the
@@ -574,7 +597,7 @@ based on an OOTS record, for example when a particular transport is indicated
 as being supported but connection attempts fail. Resolvers MAY choose to
 implement a back-off for retrying connection attempts in this scenario.
 
-# 6.3. Authentication of the Authoritative Nameserver
+## Authentication of the Authoritative Nameserver
 
 Authentication of the authoritative nameserver is not an explicit goal.
 The reason is that as an Opportunistic mechanism it will not always be
@@ -583,8 +606,8 @@ possible to do such authentication.
 While the certificate presented by the nameserver can be validated in a manner
 analogous to that described in {{!RFC8310}} this only validates that the
 capability of the nameserver is as advertised. This does not validate that the
-nameserver is authoritative for the zone in question (see Section ** for more
-security considerations).
+nameserver is authoritative for the zone in question (see
+{{security-considerations}} for more security considerations).
 
 Even without strong authentication of the authoritative server
 the proposed mechanism still provides benefits (increased privacy, potential
@@ -594,12 +617,11 @@ of the server identity is not a requirement.
 However, the result of an authentication attempt may of use to evaluate various information, e.g. :
 
 * the presence/absence of any certificate for the server
-* name mis-matches
 * the status of any certificate (e.g. validity, expiration)
 
 Such information might be logged and/or reported to the operators of the servers in question.
 
-# 6.4. Resolver Caching Strategies
+## Resolver Caching Strategies
 
 Resolvers implementing the OOTS SVCB record mechanism have several options
 for caching the transport signals received.
@@ -633,10 +655,10 @@ The chosen strategy SHOULD be documented in the implementation's
 configuration options to allow operators to make informed decisions
 about its use.
 
-# 7. Comparison with DELEG
+# Comparison with DELEG
 
 The idea to use an SVCB "oots" parameter for transport signaling
-originated with the work on DELEG {{?I-D.draft-ietf-deleg}}.  The
+originated with the work on {{?DELEG=I-D.draft-ietf-deleg}}.  The
 current document uses a new SVCB key rather than as integral part of a
 changed delegation mechanism.
 
@@ -660,7 +682,7 @@ here has the potential of enabling upgrading the transport for a
 significant fraction of the DNS traffic with a limited amount of
 effort.
 
-# 8. Security Considerations
+# Security Considerations
 
 * **Spoofing of Unvalidated OOTS SVCB records:** An OOTS SVCB record that cannot be DNSSEC
 validated (e.g., for ns.example.com where example.com is unsigned)
@@ -683,7 +705,7 @@ and DoQ for actual session security.
 request or probe for OOTS SVCB records and only authoritatives that publish
 such records will respond with them.
 
-# 9. Operational Considerations
+# Operational Considerations
 
 * **Response Size:** Including an SVCB record in the Additional
 section will increase the size of UDP responses. Authoritative server
@@ -707,64 +729,71 @@ alternative DNS transports for communication resolver to authoritative
 nameserver it is strongly suggested that monitoring (of use,
 resource consumption, etc) is considered.
 
-# 10. Privacy Considerations
+# Privacy Considerations
 
-The above text discusses discovery of transport signals and	
-authentication information in queries made by the recursive resolver.	
-Those queries may or may not occur over encrypted or authenticated	
-connections.  Only when all the connections are authenticated are all	
-the queries protected from active surveillance.  If all the	
-connections are Opportunistically encrypted then the queries are	
-protected from passive surveillance.  Otherwise they may occur in	
-cleartext, or a combination of circumstances may exist.	
+* **Opportunistic provides no security guarantees:** The above text discusses
+  discovery of transport signals and authentication information in queries made
+  by the recursive resolver. Those queries may or may not occur over encrypted
+  or authenticated connections. Only when all the connections are authenticated
+  are all the queries protected from active surveillance. If all the
+  connections are Opportunistically encrypted then the queries are protected
+  from passive surveillance. Otherwise they may occur in cleartext, or a
+  combination of circumstances may exist.
 
-Such queries leak the name of the zone that the resolver wishes to	
-ultimately query which in itself can be sensitive.  During the early	
-stages of the incremental rollout of technologies such as recursive	
-to authoritative encrypted connections it is unlikely that fully	
-confidential discovery will be possible due to the nature of the DNS	
-hierarchy.  However, if large TLDs and/or those hosted by large CDNs	
-support encrypted transports a significant number of queries from	
-busy resolvers to discovery information on TLD child zones (and	
-below) could be performed confidentially thereby greatly improving	
-the privacy over the current situation.
+* **Leakage in queries to parents:** Such queries leak the name of the zone
+  that the resolver wishes to ultimately query which in itself can be
+  sensitive. During the early stages of the incremental rollout of technologies
+  such as recursive to authoritative encrypted connections it is unlikely that
+  fully confidential discovery will be possible due to the nature of the DNS
+  hierarchy. However, if large TLDs and/or those hosted by large CDNs support
+  encrypted transports a significant number of queries from busy resolvers to
+  discovery information on TLD child zones (and below) could be performed
+  confidentially thereby greatly improving the privacy over the current
+  situation.
 
-# 10. IANA Considerations
+# IANA Considerations
 
-## 10.1. OOTS EDNS(0) Option
+## OOTS EDNS(0) Option
 
 This document defines a new EDNS(0) option, entitled "OOTS",
 assigned a value of TBD in the "DNS EDNS(0) Option Codes (OPT)" registry.
 
 ~~~
-   +-------+--------------------------+----------+----------------------+
-   | Value | Name                     | Status   | Reference            |
-   +-------+--------------------------+----------+----------------------+
-   | TBD   | OOTS                   | Standard | ( This document )    |
-   +-------+--------------------------+----------+----------------------+
+   +-------+----------------------+----------+----------------------+
+   | Value | Name                 | Status   | Reference            |
+   +-------+----------------------+----------+----------------------+
+   | TBD   | OOTS                 | Standard | ( This document )    |
+   +-------+----------------------+----------+----------------------+
 ~~~
 
 **Note to the RFC Editor**: In this section, please replace
 occurrences of "(This document)" with a proper reference.
 
-# 11. Implementation Status
+# Implementation Status
 
 **Note to the RFC Editor**: Please remove this entire section before publication.
 
-The TDNS Framework of experimental DNS servers developed and maintained by the
-Swedish Internet Foundation implements this draft (see [https://github.com/johanix/tdns](https://github.com/johanix/tdns)). 
-TDNS has support for both the authoritative nameserver and
-recursive nameserver parts of the draft.
+* The TDNS Framework of experimental DNS servers developed and maintained by the
+  Swedish Internet Foundation implements this draft (see [https://github.com/johanix/tdns](https://github.com/johanix/tdns)). 
+  TDNS has support for both the authoritative nameserver and
+  recursive nameserver parts of the draft.
+* There is a work-in-progress implementation in NSD **TODO: Reference needed**
 
-# 12. Acknowledgments
+# Acknowledgments
 
-* Many people have commented and contributed to this document in
-  different ways.  In no particular order and with a significant risk
-  of forgetting someone: The participants of the DELEG Working Group,
-  Peter Thomassen, Christian Elmerot, John Todd, Peter Koch, Willem
-  Toorop, Peter van Dijk.
+Many people have commented and contributed to this document in different ways.
+In no particular order and with a significant risk of forgetting someone: The
+participants of the DELEG Working Group, Peter Thomassen, Christian Elmerot,
+John Todd, Peter Koch, Willem Toorop, Peter van Dijk.
 
-# Appendix A. Rationale for Using the Additional Section
+--- back
+
+# Change History (to be removed before publication)
+
+* -03 version
+   * Re-structure draft and introduce Passive and Probe mode
+
+# Rationale for Using the Additional Section
 
 **Note to the RFC Editor**: Please remove this entire section before
 publication.
@@ -793,9 +822,3 @@ some suitable time).
  
 Hence, using the Additional section for request mode of OOTS has vastly more
 benefits than drawbacks.
-
---- back
-
-# Change History (to be removed before publication)
-
-> Initial public draft
