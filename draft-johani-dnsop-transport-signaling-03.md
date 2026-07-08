@@ -404,14 +404,14 @@ Stub resolvers SHOULD NOT set the EDNS(0) OOTS option in any query.
 Stub resolvers SHOULD ignore any OOTS SVCB records in the Additional section of any response.
 
 
-# OOTS Probe mode 
+## OOTS Probe mode 
 
-## Sending queries
+### Sending queries
 
 Recursive resolvers MAY also probe directly for SVCB records for any
 authoritative nameserver they need to connect to perform recursion.
 
-## Receiving responses
+### Receiving responses
 
 If the SVCB record contains a "oots" SvcParam the resolver MAY consider this a
 valid OOTS SVCB record. If it does not, the resolver MUST ignore the SCVB
@@ -420,7 +420,7 @@ record for the purposes of transport signaling.
 If any other parameter, including "ipv4hint" and "ipv6hint", is present in
 the SVCB parameter list then it SHOULD be ignored.
 
-## OOTS Probe mode queries
+### OOTS Probe mode queries
 
 **Example:**
 The resolver explicitly asks for the DNS transport signal for the
@@ -524,6 +524,8 @@ for any transport they attempt to connect over.
 Resolvers MUST always be prepared to fall back to traditional UDP/TCP transport
 if an attempt to use an alternative transport based on an OOTS SVCB record
 (especially an unvalidated one) fails or times out.
+
+**QUESTION:** Did we decide to say anything about possible implementions of this in the appendix??
 
 Resolvers MAY also cache information about the result of a connection attempt
 based on an OOTS record, for example when a particular transport is indicated
