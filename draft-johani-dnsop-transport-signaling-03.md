@@ -111,7 +111,7 @@ However, OOTS is more flexible in that resolvers may choose to operate in one
 Neither mode requires changes to the parent zone. Passive mode may require
 additional SVCB alias mode records for certain delegation patterns. 
 
-On obtaining such SVBC records recursive resolvers can then apply a local
+On obtaining such SVCB records recursive resolvers can then apply a local
 _connection_ policy to Opportunistically upgrade connections to the
 authoritative to an encrypted transport contained within the signaled
 information.
@@ -137,6 +137,8 @@ testing and experimental deployments. Early work is expected to include
 comparing the two modes to see if one or the other is preferable or if both
 should be part of the long term solution. Other work will investigate if the
 structure of, and the information in, the SVCB "oots" key is useful in practice.
+
+*NOTE: * While DNS over HTTP (DoH) {{!RFC8484}} is also an option as a recursive to authoritative encrypted transport many of the advantages of the use of DoH stub to resolver do not apply in the recursive to authoritative context. Hence, there appears to be little current appetite to deploy DoH for this use. So while DoH is covered by this specification and included in the SVCB "oots" key definition, the examples and discussion here reference only DoT and DoQ for brevity.
 
 ## Structure of the document
 
@@ -166,14 +168,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 14 {{!RFC2119}} {{!RFC8174}} when, and only when, they appear in all
 capitals.
 
-General DNS terminology used here follows that defined in {{!RFC9499}}. A short description of a number of relevant terms described there are listed below for context along with new terms used in this document.
-
-* **Authoritative Nameserver (Auth Server):** A DNS server that holds
-the authoritative zone data for a specific domain.
-
-* **Recursive Nameserver (Resolver):** A DNS server that processes
-user queries, performing iterative lookups to authoritative servers to
-resolve domain names.
+General DNS terminology used here follows that defined in {{!RFC9499}}.
 
 * **OOTS Passive mode:** Recursive resolvers set the EDNS(0) OOTS Option in a query and authoritative servers supply EDNS(0) OOTS Responses in the Additional section if appropriate.
 
@@ -182,6 +177,8 @@ resolve domain names.
 * **SVCB Record:** Service Binding record, as defined in {{!RFC9460}}.
 
 * **SCVB "oots" key:** New experimental Service Parameter Key (SvcParamKey)  key defined in {{!I-D.draft-johani-dnsop-svcb-oots}} which allows an operator to advertise a requested query load for each advertised transport.
+
+* **OOTS Record:** Service Binding record, as defined in {{!RFC9460}} that contains the SVCB "oots" key.
 
 * **EDNS(0) OOTS Option:** New EDNS(0) flag that indicates a resolver wishes to receive OOTS SVCB records in the Additional section of the response.
 
@@ -361,7 +358,7 @@ SVCB parameter list then that parameter SHOULD be ignored.
 
 **QUESTION:** Should we specify that authoritatives that implement this specification set the EDNS(0) OOTS option in a response to make it clearer that there is no signal? Since both the option and the records can be tampered with if they are sent over cleartext this may not be useful. But if the response it sent over an encrypted transport this may form a useful signal for measuring deployment. 
 
-**TODO:** We do not yet discuss multiple SVCB records in a response....
+**TODO:** We do not yet discuss multiple SVCB records in a response. 
 
 
 ### OOTS Passive mode queries
@@ -518,14 +515,16 @@ ns.example.net. 300 IN SVCB 1 . oots="do53:100,dot:5,doq:5"
 Resolver MAY attempt connections over any transport with a weight greater than
 1 in the "oots" SvcParam.
 
-Resolvers SHOULD honor any transport weight value found in the "oots" SvcParam
-for any transport they attempt to connect over.
+A resolver MUST interpret a value of more than 100 as 100.
+
+If resolvers choose to use encrypted transports, they SHOULD honor any transport weight value found in the "oots" SvcParam
+for any transport they attempt to connect over. Resolvers MAY choose to use lower transport weights for encrypted transports due to local resource constraints. Resolvers SHOULD NOT use higher transport weight value found in the unless there is a compelling reason, e.g. no other transport is available.
 
 Resolvers MUST always be prepared to fall back to traditional UDP/TCP transport
 if an attempt to use an alternative transport based on an OOTS SVCB record
 (especially an unvalidated one) fails or times out.
 
-**QUESTION:** Did we decide to say anything about possible implementions of this in the appendix??
+**QUESTION:** Did we decide to say anything about possible implementations of this in the appendix??
 
 Resolvers MAY also cache information about the result of a connection attempt
 based on an OOTS record, for example when a particular transport is indicated
@@ -546,7 +545,7 @@ ns.dnsprovider.com).
   ignore the record and proceed as if no record had been received. The result of
    a failed the DNSSEC validation can be logged for further investigation.
 
-**QUESTION**: Should the above DNSSEC restriction still apply?
+**QUESTION**: Should the above DNSSEC restriction still apply? If so, we should explain when the two SHOULDs above might not be followed.
 
 * **Prioritisation of signals:** Similarly to NS re-validation {{?I-D.draft-ietf-dnsop-ns-revalidation}}, any DNSSEC-validated OOTS SVCB record found via an explicit probe query MUST take precedence over any unvalidated OOTS SVCB record. OOTS signals are one of a number of methods that resolvers can use to determine transport capabilities of servers and they should be prioritized appropriately. For example, and OOTS signal may be deemed higher priority then the results of probing port 853 but MUST not take precedence over a DNSSEC signed transport signal obtained via a DELEG record.
 
@@ -711,7 +710,7 @@ regardless of the specific name used in the NS RRset.
 
 ### Methodology  1
 
-An authoritative nameserver SHOULD include OOTS SVBC records in the Additional
+An authoritative nameserver SHOULD include OOTS SVCB records in the Additional
 section and *all* of the following conditions are met:
 
 1. **Presence of the OOTS Option:** The query includes an EDNS(0) OOTS option from the resolver.
